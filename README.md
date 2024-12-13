@@ -138,3 +138,25 @@ A modern Streamlit application for annotating financial advisory call transcript
 ## 🚀 Installation & Setup
 
 1. Clone the repository:
+
+## 📸 Screenshots
+
+### Main Interface
+![Main Interface](screenshots/main_interface.png)
+*The main interface showing the transcript and annotation form side by side*
+
+### Annotation Form
+![Annotation Form](screenshots/annotation_form.png)
+*Expandable sections for comprehensive call annotation*
+
+### LLM Evaluation
+![LLM Comparison](screenshots/llm_comparison.png)
+*Side-by-side comparison of human and LLM annotations with metrics*
+
+### Data Management
+![Data View](screenshots/data_view.png)
+*View and export annotated data in tabular format*
+
+### Performance Metrics
+![Metrics Dashboard](screenshots/metrics.png)
+*Detailed performance metrics and comparison statistics*
