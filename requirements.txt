@@ -18,3 +18,5 @@ streamlit-extras>=0.3.0  # For enhanced UI components
 black>=23.0.0  # Code formatting
 pylint>=3.0.0  # Code analysis
 pytest>=7.0.0  # Testing 
+
+sentence_transformers
