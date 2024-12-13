@@ -238,91 +238,149 @@ def main():
                     )
 
         with col2:
-            st.markdown('<h3 class="section-header">Annotation Form</h3>', unsafe_allow_html=True)
+            st.markdown('<h3 class="section-header">401k Planning Call Annotation</h3>', unsafe_allow_html=True)
             
             with st.form("annotation_form", clear_on_submit=True):
-                col3, col4 = st.columns(2)
-                
-                with col3:
-                    call_id = st.text_input("📞 Call ID")
-                    customer_intent = st.text_input("🎯 Customer Intent")
-                    agent_name = st.text_input("👤 Agent Name")
-                
-                with col4:
-                    call_date = st.date_input("�� Call Date")
-                    call_duration = st.text_input("⏱️ Call Duration")
-                    customer_id = st.text_input("🆔 Customer ID")
-                
-                st.markdown("---")
-                
-                col5, col6 = st.columns(2)
-                
-                with col5:
-                    issue_category = st.selectbox("🏷️ Issue Category", 
-                        ["Technical", "Billing", "Account", "Product", "Other"])
-                    resolution_status = st.selectbox("✅ Resolution Status", 
-                        ["Resolved", "Pending", "Escalated", "Unresolved"])
-                
-                with col6:
-                    priority_level = st.selectbox("🔥 Priority Level", 
-                        ["Low", "Medium", "High"])
-                    language = st.selectbox("���� Language", 
-                        ["English", "Spanish", "French", "German", "Other"])
-                
-                st.markdown("---")
-                
-                col7, col8 = st.columns(2)
-                
-                with col7:
-                    customer_satisfaction = st.slider("😊 Customer Satisfaction", 1, 5, 3)
-                    technical_skills = st.slider("💻 Technical Skills", 1, 5, 3)
-                
-                with col8:
-                    communication_skills = st.slider("🗣️ Communication Skills", 1, 5, 3)
-                    problem_solving = st.slider("🧩 Problem Solving", 1, 5, 3)
-                
-                st.markdown("---")
-                
-                col9, col10 = st.columns(2)
-                
-                with col9:
-                    first_call = st.checkbox("1️⃣ First Call Resolution")
-                    follow_up = st.checkbox("📅 Follow-up Required")
-                
-                with col10:
-                    transfer = st.checkbox("↗️ Transfer Required")
-                    product_mentioned = st.text_input("🏷️ Product Mentioned")
-                
-                notes = st.text_area("📝 Additional Notes")
-                reviewer = st.text_input("👤 Reviewer Name")
-                
+                # Basic Call Information
+                with st.expander("📞 Basic Call Information", expanded=True):
+                    col3, col4 = st.columns(2)
+                    with col3:
+                        call_id = st.text_input("Call ID")
+                        agent_name = st.text_input("Financial Advisor Name")
+                        call_duration = st.text_input("Call Duration")
+                    with col4:
+                        call_date = st.date_input("Call Date")
+                        customer_id = st.text_input("Client ID")
+                        call_type = st.selectbox("Call Type", 
+                            ["Initial Consultation", "Portfolio Review", "Retirement Planning", "Investment Adjustment", "General Inquiry"])
+
+                # Client Profile
+                with st.expander("👤 Client Profile", expanded=True):
+                    col5, col6 = st.columns(2)
+                    with col5:
+                        age = st.number_input("Client Age", min_value=18, max_value=100)
+                        risk_tolerance = st.select_slider("Risk Tolerance", 
+                            options=["Very Conservative", "Conservative", "Moderate", "Aggressive", "Very Aggressive"])
+                    with col6:
+                        current_401k_balance = st.number_input("Current 401k Balance ($)")
+                        years_to_retirement = st.number_input("Years to Retirement", min_value=0, max_value=50)
+
+                # Retirement Goals
+                with st.expander("🎯 Retirement Goals", expanded=True):
+                    retirement_goals = st.multiselect("Selected Retirement Goals",
+                        ["Early Retirement", "Travel Plans", "Healthcare Coverage", 
+                         "Legacy Planning", "Debt-Free Retirement", "Part-time Work",
+                         "Relocate/Downsize", "Start Business", "Education Funding",
+                         "Charitable Giving"])
+                    
+                    monthly_retirement_income = st.number_input("Desired Monthly Retirement Income ($)")
+                    
+                    col7, col8 = st.columns(2)
+                    with col7:
+                        retirement_location = st.selectbox("Planned Retirement Location",
+                            ["Current Location", "Different State", "International", "Undecided"])
+                    with col8:
+                        lifestyle_expectation = st.select_slider("Lifestyle Expectation",
+                            options=["Basic", "Comfortable", "Luxurious"])
+
+                # Investment Breakdown
+                with st.expander("💰 Investment Allocation", expanded=True):
+                    st.markdown("##### Current Portfolio Allocation")
+                    
+                    investment_types = ["Stocks", "Bonds", "Cash", "Real Estate", "Other"]
+                    investment_data = {}
+                    
+                    for i in range(0, len(investment_types), 2):
+                        col9, col10 = st.columns(2)
+                        with col9:
+                            if i < len(investment_types):
+                                investment_data[investment_types[i]] = {
+                                    "percentage": st.slider(f"{investment_types[i]} (%)", 0, 100, 0),
+                                    "amount": st.number_input(f"{investment_types[i]} Amount ($)", min_value=0.0)
+                                }
+                        with col10:
+                            if i + 1 < len(investment_types):
+                                investment_data[investment_types[i + 1]] = {
+                                    "percentage": st.slider(f"{investment_types[i + 1]} (%)", 0, 100, 0),
+                                    "amount": st.number_input(f"{investment_types[i + 1]} Amount ($)", min_value=0.0)
+                                }
+
+                # Interaction Summary
+                with st.expander("📝 Interaction Summary", expanded=True):
+                    key_topics_discussed = st.multiselect("Key Topics Discussed",
+                        ["Contribution Rates", "Investment Options", "Risk Management",
+                         "Tax Implications", "Employer Match", "Fund Selection",
+                         "Rebalancing Strategy", "Distribution Planning", "Rollover Options",
+                         "Social Security Integration"])
+                    
+                    recommendations = st.text_area("Advisor Recommendations")
+                    
+                    action_items = st.multiselect("Action Items",
+                        ["Increase Contributions", "Rebalance Portfolio", "Update Beneficiaries",
+                         "Review Investment Mix", "Schedule Follow-up", "Document Updates",
+                         "Risk Assessment", "Create Financial Plan"])
+
+                # Follow-up Details
+                with st.expander("📅 Follow-up Details", expanded=True):
+                    col11, col12 = st.columns(2)
+                    with col11:
+                        follow_up_needed = st.checkbox("Follow-up Required")
+                        follow_up_date = st.date_input("Follow-up Date") if follow_up_needed else None
+                    with col12:
+                        priority_level = st.select_slider("Priority Level",
+                            options=["Low", "Medium", "High"])
+                        follow_up_type = st.selectbox("Follow-up Type",
+                            ["Portfolio Review", "Document Collection", "Plan Update",
+                             "Investment Changes", "General Check-in"]) if follow_up_needed else None
+
+                # Additional Notes
+                with st.expander("📌 Additional Notes", expanded=True):
+                    special_considerations = st.text_area("Special Considerations")
+                    compliance_notes = st.text_area("Compliance Notes")
+                    
                 submit_button = st.form_submit_button("Submit Annotation")
                 
                 if submit_button:
                     attributes = {
-                        "Call ID": call_id,
-                        "Customer Intent": customer_intent,
-                        "Issue Category": issue_category,
-                        "Resolution Status": resolution_status,
-                        "Customer Satisfaction": customer_satisfaction,
-                        "Agent Name": agent_name,
-                        "Call Duration": call_duration,
-                        "First Call Resolution": first_call,
-                        "Follow-up Required": follow_up,
-                        "Priority Level": priority_level,
-                        "Product Mentioned": product_mentioned,
-                        "Customer ID": customer_id,
-                        "Call Date": call_date,
-                        "Language": language,
-                        "Transfer Required": transfer,
-                        "Technical Skills": technical_skills,
-                        "Communication Skills": communication_skills,
-                        "Problem Solving": problem_solving,
-                        "Notes": notes,
-                        "Reviewer": reviewer
+                        "Call Info": {
+                            "Call ID": call_id,
+                            "Advisor": agent_name,
+                            "Date": call_date,
+                            "Duration": call_duration,
+                            "Type": call_type,
+                            "Client ID": customer_id
+                        },
+                        "Client Profile": {
+                            "Age": age,
+                            "Risk Tolerance": risk_tolerance,
+                            "Current Balance": current_401k_balance,
+                            "Years to Retirement": years_to_retirement
+                        },
+                        "Retirement Goals": {
+                            "Goals List": retirement_goals,
+                            "Monthly Income Target": monthly_retirement_income,
+                            "Location": retirement_location,
+                            "Lifestyle": lifestyle_expectation
+                        },
+                        "Investment Allocation": investment_data,
+                        "Interaction Summary": {
+                            "Topics": key_topics_discussed,
+                            "Recommendations": recommendations,
+                            "Action Items": action_items
+                        },
+                        "Follow-up": {
+                            "Required": follow_up_needed,
+                            "Date": follow_up_date,
+                            "Priority": priority_level,
+                            "Type": follow_up_type
+                        },
+                        "Notes": {
+                            "Special Considerations": special_considerations,
+                            "Compliance Notes": compliance_notes
+                        }
                     }
                     st.session_state.annotations.append(attributes)
-                    st.success("✅ Annotation submitted successfully!")
+                    st.success("✅ 401k Planning Call Annotation Submitted Successfully!")
 
     with tabs[1]:
         st.markdown('<h3 class="section-header">Submitted Annotations</h3>', unsafe_allow_html=True)
