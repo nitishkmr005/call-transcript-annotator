@@ -340,7 +340,7 @@ def main():
                     )
 
         with col2:
-            st.markdown('<h3 class="section-header">401k Planning Call Annotation</h3>', unsafe_allow_html=True)
+            st.markdown('<h3 class="section-header">Call Annotation</h3>', unsafe_allow_html=True)
             
             with st.form("annotation_form", clear_on_submit=True):
                 # Basic Call Information

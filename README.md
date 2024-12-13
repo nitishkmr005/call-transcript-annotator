@@ -11,7 +11,7 @@ A modern Streamlit application for annotating financial advisory call transcript
   * Professional message formatting with consistent black text
   * Split-screen interface for efficient annotation
 
-### 📝 401k Planning Call Annotation System
+### 📝 Call Annotation System
 * Comprehensive form with expandable sections:
   * 📞 Basic Call Information
     - Call ID, Advisor Name, Duration
