@@ -1,6 +1,3 @@
-<<<<<<< HEAD
-# call-transcript-annotator
-=======
 # Call Transcript Annotation Tool
 
 A modern Streamlit application for annotating customer service call transcripts with detailed metadata and analysis. Features a sleek UI with color-coded conversations and comprehensive annotation capabilities.
@@ -54,4 +51,3 @@ A modern Streamlit application for annotating customer service call transcripts 
 ## 🚀 Installation
 
 1. Clone the repository:
->>>>>>> 9a6928a (Initial commit: Call Transcript)
