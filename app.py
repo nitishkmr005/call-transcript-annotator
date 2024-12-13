@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import os
 from pathlib import Path
+from fuzzywuzzy import fuzz
 
 # Custom CSS for better styling
 def local_css():
@@ -298,6 +299,51 @@ def load_dummy_llm_data():
     }
     return dummy_data
 
+def calculate_metrics(human_value, llm_value):
+    """Calculate metrics with fuzzy matching for text fields"""
+    if isinstance(human_value, (str, int, float)):
+        if isinstance(human_value, str) and isinstance(llm_value, str):
+            # Fuzzy match for text fields
+            ratio = fuzz.ratio(human_value.lower(), llm_value.lower()) / 100.0
+            return {
+                "precision": ratio,
+                "recall": ratio,
+                "match": "✅" if ratio > 0.9 else "⚠️" if ratio > 0.7 else "❌",
+                "similarity": f"{ratio:.1%}"
+            }
+        else:
+            # Exact match for numbers
+            match = human_value == llm_value
+            return {
+                "precision": 1.0 if match else 0.0,
+                "recall": 1.0 if match else 0.0,
+                "match": "✅" if match else "❌",
+                "similarity": "100%" if match else "0%"
+            }
+    elif isinstance(human_value, list):
+        if not human_value or not llm_value:
+            return {"precision": 0.0, "recall": 0.0, "match": "❌", "similarity": "0%"}
+        
+        # Calculate average fuzzy match ratio for list items
+        matches = []
+        for h_item in human_value:
+            best_match = max((fuzz.ratio(str(h_item).lower(), str(l_item).lower()) / 100.0) 
+                           for l_item in llm_value)
+            matches.append(best_match)
+        
+        avg_similarity = sum(matches) / len(matches)
+        precision = avg_similarity
+        recall = avg_similarity
+        
+        return {
+            "precision": precision,
+            "recall": recall,
+            "match": "✅" if avg_similarity > 0.9 else "⚠️" if avg_similarity > 0.7 else "❌",
+            "similarity": f"{avg_similarity:.1%}"
+        }
+    
+    return {"precision": 0.0, "recall": 0.0, "match": "❓", "similarity": "N/A"}
+
 def main():
     st.set_page_config(layout="wide", page_title="Call Transcript Annotation", page_icon="📞")
     local_css()
@@ -563,27 +609,6 @@ def main():
             with col_metrics:
                 st.markdown('<h4 class="subsection-header">Comparison Metrics</h4>', unsafe_allow_html=True)
                 
-                def calculate_metrics(human_value, llm_value):
-                    if isinstance(human_value, (str, int, float)):
-                        match = human_value == llm_value
-                        return {
-                            "precision": 1.0 if match else 0.0,
-                            "recall": 1.0 if match else 0.0,
-                            "match": "✅" if match else "❌"
-                        }
-                    elif isinstance(human_value, list):
-                        if not human_value or not llm_value:
-                            return {"precision": 0.0, "recall": 0.0, "match": "❌"}
-                        common = set(human_value) & set(llm_value)
-                        precision = len(common) / len(llm_value) if llm_value else 0
-                        recall = len(common) / len(human_value) if human_value else 0
-                        return {
-                            "precision": precision,
-                            "recall": recall,
-                            "match": "✅" if precision == recall == 1.0 else "⚠���"
-                        }
-                    return {"precision": 0.0, "recall": 0.0, "match": "❓"}
-                
                 # Calculate and display metrics for each section
                 overall_metrics = {"precision": [], "recall": []}
                 
@@ -594,7 +619,7 @@ def main():
                                 llm_value = llm_annotation.get(section, {}).get(key)
                                 metrics = calculate_metrics(human_value, llm_value)
                                 
-                                st.write(f"**{key}** {metrics['match']}")
+                                st.write(f"**{key}** {metrics['match']} ({metrics['similarity']})")
                                 col1, col2 = st.columns(2)
                                 with col1:
                                     st.metric("Precision", f"{metrics['precision']:.2%}")

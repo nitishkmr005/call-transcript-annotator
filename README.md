@@ -73,14 +73,19 @@ A modern Streamlit application for annotating financial advisory call transcript
 #### Metric Calculations
 * Field-level Comparison:
   * **Text Fields**
-    - Direct string matching
-    - Binary scoring (1.0 for match, 0.0 for mismatch)
-    - Visual indicators: ✅ for match, ❌ for mismatch
+    - Fuzzy string matching using Levenshtein distance
+    - Similarity ratio (0-100%) for partial matches
+    - Thresholds:
+      * >90% = Perfect match (✅)
+      * 70-90% = Partial match (⚠️)
+      * <70% = No match (❌)
   
   * **List Fields** (e.g., Goals, Topics)
-    - Set-based comparison
+    - Item-by-item fuzzy matching
+    - Best match calculation for each item
     - Precision = |Common Items| / |LLM Items|
     - Recall = |Common Items| / |Human Items|
+    - Average similarity score across all items
     - Visual indicators: 
       * ✅ Perfect match (precision = recall = 1.0)
       * ⚠️ Partial match
@@ -88,6 +93,7 @@ A modern Streamlit application for annotating financial advisory call transcript
 
   * **Numeric Fields**
     - Exact value matching
+    - Binary scoring (100% or 0%)
     - Future enhancement: tolerance-based matching
 
 #### Performance Metrics
@@ -95,10 +101,12 @@ A modern Streamlit application for annotating financial advisory call transcript
   * Individual metrics for each annotation field
   * Aggregated scores per section
   * Expandable detailed view
+  * Similarity percentage display
 
 * Overall Performance:
   * Average Precision across all fields
   * Average Recall across all fields
+  * Average Similarity scores
   * Summary statistics dashboard
 
 #### Visual Feedback
@@ -107,6 +115,7 @@ A modern Streamlit application for annotating financial advisory call transcript
   * Yellow (⚠️): Partial match
   * Red (❌): No match
   * Gray (❓): Unable to compare
+  * Percentage display for similarity scores
 
 #### Use Cases
 * Quality Assessment:
