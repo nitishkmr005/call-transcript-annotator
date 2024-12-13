@@ -141,22 +141,14 @@ A modern Streamlit application for annotating financial advisory call transcript
 
 ## 📸 Screenshots
 
-### Main Interface
-![Main Interface](screenshots/main_interface.png)
-*The main interface showing the transcript and annotation form side by side*
+### Transcript & Annotation Tab
+![Transcript and Annotation Interface](screenshots/UI_1.png)
+*Main interface with color-coded transcript viewer and comprehensive annotation form*
 
-### Annotation Form
-![Annotation Form](screenshots/annotation_form.png)
-*Expandable sections for comprehensive call annotation*
+### View Annotations Tab
+![Annotations View](screenshots/UI_2.png)
+*Tabular view of all submitted annotations with export options*
 
-### LLM Evaluation
-![LLM Comparison](screenshots/llm_comparison.png)
-*Side-by-side comparison of human and LLM annotations with metrics*
-
-### Data Management
-![Data View](screenshots/data_view.png)
-*View and export annotated data in tabular format*
-
-### Performance Metrics
-![Metrics Dashboard](screenshots/metrics.png)
-*Detailed performance metrics and comparison statistics*
+### LLM Evaluation Tab
+![LLM Evaluation](screenshots/UI_3.png)
+*Side-by-side comparison of human annotations vs LLM-generated annotations with performance metrics*
