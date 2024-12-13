@@ -81,11 +81,28 @@ A modern Streamlit application for annotating financial advisory call transcript
       * <70% = No match (❌)
   
   * **List Fields** (e.g., Goals, Topics)
-    - Item-by-item fuzzy matching
-    - Best match calculation for each item
-    - Precision = |Common Items| / |LLM Items|
-    - Recall = |Common Items| / |Human Items|
-    - Average similarity score across all items
+    - Bidirectional fuzzy matching:
+      * Human → LLM: Find best match for each human item
+      * LLM → Human: Find best match for each LLM item
+    - Token-based comparison (order-independent):
+      * Uses token_sort_ratio for comparing items
+      * "Risk Management" matches "Management of Risk"
+    - Partial List Matching:
+      * Handles overlapping items (e.g., "Investment Options" present in both lists)
+      * Example:
+        ```
+        Human: ["Investment Options", "Rebalancing Strategy"]
+        LLM:   ["Contribution Rates", "Investment Options", "Risk Management"]
+        Result: Partial match (⚠️)
+          - Found: "Investment Options" (100% match)
+          - Precision: ~33% (1 out of 3 LLM items matched)
+          - Recall: ~50% (1 out of 2 Human items matched)
+          - Similarity: ~42% (average of precision and recall)
+        ```
+    - Scoring:
+      * Precision = Average of LLM→Human best matches
+      * Recall = Average of Human→LLM best matches
+      * Similarity = (Precision + Recall) / 2
     - Visual indicators: 
       * ✅ Perfect match (precision = recall = 1.0)
       * ⚠️ Partial match
