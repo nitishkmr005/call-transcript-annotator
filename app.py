@@ -265,6 +265,54 @@ def save_annotations_to_parquet(annotations):
     
     combined_df.to_parquet(file_path, index=False)
 
+def load_dummy_annotation_data():
+    """Load dummy LLM annotations for testing - matching human annotation structure"""
+    dummy_data = {
+        "Call Info": {
+            "Call ID": "CALL_001",
+            "Advisor": "John Smith",
+            "Date": "2024-03-20",
+            "Duration": "30 minutes",
+            "Type": "Retirement Planning",
+            "Client ID": "C12345"
+        },
+        "Client Profile": {
+            "Age": 45,
+            "Risk Tolerance": "Moderate",
+            "Current Balance": 250000,
+            "Years to Retirement": 20
+        },
+        "Retirement Goals": {
+            "Goals List": ["Travel Plans", "Healthcare Coverage", "Legacy Planning"],
+            "Monthly Income Target": 5000,
+            "Location": "Different State",
+            "Lifestyle": "Comfortable"
+        },
+        "Investment Allocation": {
+            "Stocks": {"percentage": 60, "amount": 150000},
+            "Bonds": {"percentage": 30, "amount": 75000},
+            "Cash": {"percentage": 10, "amount": 25000},
+            "Real Estate": {"percentage": 0, "amount": 0},
+            "Other": {"percentage": 0, "amount": 0}
+        },
+        "Interaction Summary": {
+            "Topics": ['Investment Options' 'Rebalancing Strategy'],
+            "Recommendations": "Increase contribution rate to maximize employer match",
+            "Action Items": ["Increase Contributions", "Review Investment Mix"]
+        },
+        "Follow-up": {
+            "Required": True,
+            "Date": "2024-04-20",
+            "Priority": "High",
+            "Type": "Portfolio Review"
+        },
+        "Notes": {
+            "Special Considerations": "Client interested in ESG investments",
+            "Compliance Notes": "All disclosures provided"
+        }
+    }
+    return dummy_data
+
 def load_dummy_llm_data():
     """Load dummy LLM annotations for testing - matching human annotation structure"""
     dummy_data = {
@@ -331,23 +379,16 @@ def safely_convert_to_string(value):
         return repr(value)
 
 def calculate_semantic_similarity(text1, text2, threshold=0.7):
-    """
-    Calculates the semantic similarity between two texts using Sentence Transformers.
-
-    Args:
-        text1: The first text.
-        text2: The second text.
-        threshold: The similarity threshold.
-
-    Returns:
-        The cosine similarity score (0-1), or 0 if an error occurs or both texts are empty.
-    """
+    """Calculates semantic similarity, ensuring 1.0 for identical strings."""
     text1 = safely_convert_to_string(text1)
     text2 = safely_convert_to_string(text2)
-    
+
     if not text1.strip() and not text2.strip():
         return 0
-    
+
+    if text1.strip() == text2.strip():  # Explicit check for identical strings
+        return 1.0
+
     try:
         embeddings = model.encode([text1, text2], convert_to_tensor=True)
         cosine_sim = util.pytorch_cos_sim(embeddings[0], embeddings[1]).item()
@@ -372,24 +413,33 @@ def calculate_fuzzy_similarity(str1, str2):
     return fuzz.partial_ratio(str1, str2) / 100
 
 def calculate_comparison_metrics(human_value, llm_value, threshold=0.7):
-    """Calculates comparison metrics based on data types, using fuzzy matching where applicable."""
+    """Calculates comparison metrics based on data types."""
     if human_value is None and llm_value is None:
         return {"match": "N/A", "similarity": "0%", "precision": 0, "recall": 0, "comparison_method": "N/A", "is_populated": False}
     if human_value is None or llm_value is None:
         return {"match": "✗", "similarity": "0%", "precision": 0, "recall": 0, "comparison_method": "N/A", "is_populated": False}
 
     if isinstance(human_value, list) and isinstance(llm_value, list):
-        return compare_lists(human_value, llm_value, threshold)
+        if all(isinstance(item, dict) for item in human_value) and all(isinstance(item, dict) for item in llm_value):
+            return compare_list_of_dictionaries(human_value, llm_value, threshold) # Call for list of dictionaries
+        elif all(isinstance(item, str) for item in human_value) and all(isinstance(item, str) for item in llm_value):
+            return compare_lists(human_value, llm_value, threshold) # Call for list of strings
+        else:
+            human_str = safely_convert_to_string(human_value)
+            llm_str = safely_convert_to_string(llm_value)
+            similarity = calculate_fuzzy_similarity(human_str, llm_str)
+            match = similarity >= threshold
+            return {"match": "✓" if match else "✗", "similarity": f"{similarity * 100:.2f}%", "precision": similarity, "recall": similarity, "comparison_method": "Fuzzy Matching", "is_populated": True}
 
     if isinstance(human_value, dict) and isinstance(llm_value, dict):
-        return compare_dictionaries(human_value, llm_value, threshold)
+        return compare_dictionaries_values(human_value, llm_value, threshold)
 
     if isinstance(human_value, str) and isinstance(llm_value, str):
         similarity = calculate_semantic_similarity(human_value, llm_value, threshold)
         match = similarity >= threshold
         return {"match": "✓" if match else "✗", "similarity": f"{similarity * 100:.2f}%", "precision": similarity, "recall": similarity, "comparison_method": "Semantic Similarity", "is_populated": True}
     
-    # Default to fuzzy matching for all other types (including numbers, booleans, etc.)
+    # Default to fuzzy matching for all other types
     human_str = safely_convert_to_string(human_value)
     llm_str = safely_convert_to_string(llm_value)
     similarity = calculate_fuzzy_similarity(human_str, llm_str)
@@ -397,100 +447,125 @@ def calculate_comparison_metrics(human_value, llm_value, threshold=0.7):
     return {"match": "✓" if match else "✗", "similarity": f"{similarity * 100:.2f}%", "precision": similarity, "recall": similarity, "comparison_method": "Fuzzy Matching", "is_populated": True}
 
 def compare_lists(human_value, llm_value, threshold=0.7):
-    """
-    Calculates metrics for comparing lists, using semantic similarity for text items and fuzzy matching for others.
+    """Compares lists using semantic/fuzzy similarity and calculates precision/recall correctly."""
 
-    Args:
-        human_value: The human-annotated list.
-        llm_value: The LLM-generated list.
-        threshold: The similarity threshold.
+    print('compare_lists')
+    human_value = [safely_convert_to_string(x) for x in human_value]
+    llm_value = [safely_convert_to_string(x) for x in llm_value]
 
-    Returns:
-        A dictionary containing the metrics: match, similarity, precision, recall, is_populated.
-    """
+    populated_human_count = sum(1 for item in human_value if item.strip())
+    populated_llm_count = sum(1 for item in llm_value if item.strip())
+
+    if not populated_human_count:
+        return {"match": "✗", "similarity": "0%", "precision": 0, "recall": 0, "comparison_method": "List Comparison", "is_populated": True}
+
     true_positives = 0
-    false_negatives = len(human_value)
-    false_positives = len(llm_value)
+    matched_llm_indices = set()
 
     for human_item in human_value:
-        if not safely_convert_to_string(human_item).strip():
-            false_negatives -= 1
+        if not human_item.strip():
             continue
 
         best_match = 0
-        for llm_item in llm_value:
-            if not safely_convert_to_string(llm_item).strip():
+        best_match_index = -1
+
+        for j, llm_item in enumerate(llm_value):
+            if not llm_item.strip() or j in matched_llm_indices:
                 continue
+
             if isinstance(human_item, str) and isinstance(llm_item, str):
                 similarity = calculate_semantic_similarity(human_item, llm_item)
+                print('SIMILARITY',similarity)
             else:
-                human_str = safely_convert_to_string(human_item)
-                llm_str = safely_convert_to_string(llm_item)
-                similarity = calculate_fuzzy_similarity(human_str, llm_str)
-            best_match = max(best_match, similarity)
+                similarity = calculate_fuzzy_similarity(human_item, llm_item)
+                print('FUZZY',similarity)
+
+            if similarity > best_match:
+                best_match = similarity
+                best_match_index = j
 
         if best_match >= threshold:
             true_positives += 1
-            false_negatives -= 1
-            false_positives -= 1
+            if best_match_index != -1: #check if there is a valid index to add
+                matched_llm_indices.add(best_match_index)
 
-    precision = true_positives / (true_positives + false_positives) if (true_positives + false_positives) > 0 else 0
-    recall = true_positives / (true_positives + false_negatives) if (true_positives + false_negatives) > 0 else 0
-
+    precision = true_positives / populated_llm_count if populated_llm_count > 0 else 0
+    recall = true_positives / populated_human_count if populated_human_count > 0 else 0
+    avg_similarity = (precision + recall) / 2 if (precision + recall) > 0 else 0
+    match = avg_similarity >= threshold
     return {
-        "match": "✓" if precision == 1 and recall == 1 else "✗",
-        "similarity": f"{(precision + recall) * 50:.2f}%",
+        "match": "✓" if match else "✗",
+        "similarity": f"{avg_similarity * 100:.2f}%",
         "precision": precision,
         "recall": recall,
+        "comparison_method": "List Comparison",
         "is_populated": True
     }
 
 def compare_list_of_dictionaries(human_value, llm_value, threshold=0.7):
-    """
-    Calculates metrics for comparing lists of dictionaries.
+    """Compares lists of dictionaries and calculates precision/recall as requested."""
 
-    Args:
-        human_value: The human-annotated list of dictionaries.
-        llm_value: The LLM-generated list of dictionaries.
-        threshold: The similarity threshold.
+    populated_human_count = len(human_value)
+    populated_llm_count = len(llm_value)
 
-    Returns:
-        A dictionary containing the metrics: match, similarity, precision, recall, is_populated.
-    """
+    if not populated_human_count:
+        return {"match": "✗", "similarity": "0%", "precision": 0, "recall": 0, "comparison_method": "List of Dictionaries Comparison", "is_populated": True}
+
     true_positives = 0
-    false_negatives = len(human_value)
-    false_positives = len(llm_value)
-    
+    similarities = []
+
     for human_dict in human_value:
-        found_match = False
+        best_match_similarity = 0
         for llm_dict in llm_value:
-            # Ensure all human_dict keys exist in llm_dict
-            if all(human_key in llm_dict for human_key in human_dict):
-                matches = all(
-                    calculate_semantic_similarity(str(human_dict[key]), str(llm_dict.get(key, ''))) >= threshold
-                    for key in human_dict
-                )
-                
-                if matches:
-                    true_positives += 1
-                    false_negatives -= 1
-                    false_positives -= 1
-                    found_match = True
-                    break
-        
-        if not found_match:
-            continue
-    
-    precision = true_positives / (true_positives + false_positives) if (true_positives + false_positives) > 0 else 0
-    recall = true_positives / (true_positives + false_negatives) if (true_positives + false_negatives) > 0 else 0
-    
+            current_similarity = 0
+            compared_items = 0
+            for human_key, human_item in human_dict.items():
+                if human_key in llm_dict:
+                    llm_item = llm_dict[human_key]
+                    if isinstance(human_item, str) and isinstance(llm_item, str):
+                        similarity = calculate_semantic_similarity(human_item, llm_item)
+                    else:
+                        human_str = safely_convert_to_string(human_item)
+                        llm_str = safely_convert_to_string(llm_item)
+                        similarity = calculate_fuzzy_similarity(human_str, llm_str)
+                    current_similarity += similarity
+                    compared_items += 1
+            if compared_items > 0:
+                current_similarity /= compared_items
+                best_match_similarity = max(best_match_similarity, current_similarity)
+        if best_match_similarity >= threshold:
+            true_positives += 1
+            similarities.append(best_match_similarity)
+
+    precision = true_positives / populated_llm_count if populated_llm_count > 0 else 0
+    recall = true_positives / populated_human_count if populated_human_count > 0 else 0
+    avg_similarity = np.mean(similarities) if similarities else 0
+    match = avg_similarity >= threshold
     return {
-        "match": "✓" if precision == 1 and recall == 1 else "✗",
-        "similarity": f"{(precision + recall) * 50:.2f}%",
+        "match": "✓" if match else "✗",
+        "similarity": f"{avg_similarity * 100:.2f}%",
         "precision": precision,
         "recall": recall,
+        "comparison_method": "List of Dictionaries Comparison",
         "is_populated": True
     }
+
+def compare_dictionaries_values(human_data, llm_data, threshold=0.7):
+    """Compares dictionary values using fuzzy matching and returns overall similarity."""
+    similarities = []
+    for key, human_val in human_data.items():
+        if key in llm_data:
+            llm_val = llm_data[key]
+            human_str = safely_convert_to_string(human_val)
+            llm_str = safely_convert_to_string(llm_val)
+            similarity = calculate_fuzzy_similarity(human_str, llm_str)
+            similarities.append(similarity)
+    if similarities:
+        avg_similarity = np.mean(similarities)
+        match = avg_similarity >= threshold
+        return {"match": "✓" if match else "✗", "similarity": f"{avg_similarity * 100:.2f}%", "precision": avg_similarity, "recall": avg_similarity, "comparison_method": "Dictionary Comparison", "is_populated": True}
+    else:
+        return {"match": "✗", "similarity": "0%", "precision": 0, "recall": 0, "comparison_method": "Dictionary Comparison", "is_populated": True}
 
 def compare_dictionaries(human_data, llm_data, threshold=0.7):
     """
@@ -591,10 +666,10 @@ def compare_dictionaries(human_data, llm_data, threshold=0.7):
     else:
         avg_recall = np.nan
 
-    print(f"Average Precision (populated LLM attributes): {avg_precision:.2%}")
-    print(f"Average Recall (populated human attributes): {avg_recall:.2%}")
-    print(f"Total LLM populated attributes: {populated_llm_count}")
-    print(f"Total human annotation populated attributes: {populated_human_count}")
+    # print(f"Average Precision (populated LLM attributes): {avg_precision:.2%}")
+    # print(f"Average Recall (populated human attributes): {avg_recall:.2%}")
+    # print(f"Total LLM populated attributes: {populated_llm_count}")
+    # print(f"Total human annotation populated attributes: {populated_human_count}")
 
     return metrics_df
 
