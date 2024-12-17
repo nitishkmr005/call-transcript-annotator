@@ -447,52 +447,54 @@ def calculate_comparison_metrics(human_value, llm_value, threshold=0.7):
     return {"match": "✓" if match else "✗", "similarity": f"{similarity * 100:.2f}%", "precision": similarity, "recall": similarity, "comparison_method": "Fuzzy Matching", "is_populated": True}
 
 def compare_lists(human_value, llm_value, threshold=0.7):
-    """Compares lists using semantic/fuzzy similarity and calculates precision/recall correctly."""
-
-    print('compare_lists')
+    """Compares lists using semantic similarity and calculates precision/recall (order-independent)."""
+    print("Calling compare_lists") #check if this function is called
+    print(f"Human Value: {human_value}")
+    print(f"LLM Value: {llm_value}")
     human_value = [safely_convert_to_string(x) for x in human_value]
     llm_value = [safely_convert_to_string(x) for x in llm_value]
+    print(f"Human Value after converting to string: {human_value}")
+    print(f"LLM Value after converting to string: {llm_value}")
 
     populated_human_count = sum(1 for item in human_value if item.strip())
     populated_llm_count = sum(1 for item in llm_value if item.strip())
 
     if not populated_human_count:
         return {"match": "✗", "similarity": "0%", "precision": 0, "recall": 0, "comparison_method": "List Comparison", "is_populated": True}
-
+    
     true_positives = 0
     matched_llm_indices = set()
-
+    similarities = []
     for human_item in human_value:
         if not human_item.strip():
             continue
-
-        best_match = 0
-        best_match_index = -1
-
+        
+        found_match = False
         for j, llm_item in enumerate(llm_value):
             if not llm_item.strip() or j in matched_llm_indices:
                 continue
-
+            
             if isinstance(human_item, str) and isinstance(llm_item, str):
                 similarity = calculate_semantic_similarity(human_item, llm_item)
-                print('SIMILARITY',similarity)
             else:
                 similarity = calculate_fuzzy_similarity(human_item, llm_item)
-                print('FUZZY',similarity)
-
-            if similarity > best_match:
-                best_match = similarity
-                best_match_index = j
-
-        if best_match >= threshold:
-            true_positives += 1
-            if best_match_index != -1: #check if there is a valid index to add
-                matched_llm_indices.add(best_match_index)
+                
+            if similarity >= threshold:
+                true_positives += 1
+                matched_llm_indices.add(j)
+                similarities.append(similarity)
+                found_match = True
+                break
+        if not found_match:
+            continue
 
     precision = true_positives / populated_llm_count if populated_llm_count > 0 else 0
     recall = true_positives / populated_human_count if populated_human_count > 0 else 0
-    avg_similarity = (precision + recall) / 2 if (precision + recall) > 0 else 0
+    avg_similarity = np.mean(similarities) if similarities else 0
     match = avg_similarity >= threshold
+    print(f"Precision: {precision}")
+    print(f"Recall: {recall}")
+    print(f"Similarity: {avg_similarity}")
     return {
         "match": "✓" if match else "✗",
         "similarity": f"{avg_similarity * 100:.2f}%",
@@ -593,14 +595,21 @@ def compare_dictionaries(human_data, llm_data, threshold=0.7):
         human_value = human_data.get(key)
         llm_value = llm_data.get(key)
         try:
+            # Convert human_value to a list if it's a NumPy array
+            if isinstance(human_value, np.ndarray):
+                human_value = human_value.tolist()  # This is the crucial line
+
             comparison_method = "Fuzzy Matching"  # Default is now fuzzy matching
             if isinstance(human_value, str) and isinstance(llm_value, str):
+                # print(f"Calling calculate_comparison_metrics for key: {key} (String comparison)")
                 metrics = calculate_comparison_metrics(human_value, llm_value, threshold)
                 comparison_method = metrics["comparison_method"] # Overide if it is string
             elif isinstance(human_value, list) and isinstance(llm_value, list):
+                # print(f"Calling calculate_comparison_metrics for key: {key} (List comparison)")
                 metrics = calculate_comparison_metrics(human_value, llm_value, threshold)
                 comparison_method = "List Comparison"
             elif isinstance(human_value, dict) and isinstance(llm_value, dict):
+                # print(f"Calling calculate_comparison_metrics for key: {key} (Dictionary comparison)")
                 inner_metrics_df = compare_dictionaries(human_value, llm_value, threshold)
                 if not inner_metrics_df.empty:
                     avg_precision = inner_metrics_df['Precision'].mean()
@@ -628,6 +637,9 @@ def compare_dictionaries(human_data, llm_data, threshold=0.7):
                 else:
                     continue
             else:  # All other types now use fuzzy matching
+                # print(f"human_value type: {type(human_value)}, llm_value type: {type(llm_value)} for key: {key}") #add this
+                # print(f"human_value: {human_value}, llm_value: {llm_value} for key: {key}") #add this
+                # print(f"Calling calculate_comparison_metrics for key: {key} (Default comparison)")
                 metrics = calculate_comparison_metrics(human_value, llm_value, threshold)
                 comparison_method = metrics["comparison_method"]
 
