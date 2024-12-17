@@ -935,59 +935,66 @@ def main():
             overall_metrics = {"precision": [], "recall": []}
 
             if llm_annotation:
-                    comparison_data = []
-                    overall_metrics = {"precision": [], "recall": []}
+                overall_metrics = {"precision": [], "recall": []}
 
-                    for section, human_data in human_annotation.items():
-                        llm_data = llm_annotation.get(section, {})
-                        if isinstance(human_data, dict):
-                            metrics_df = compare_dictionaries(human_data, llm_data)
-                            if not metrics_df.empty:
-                                st.write(f"### {section} Metrics")
-                                
-                                def highlight_matches(val):
-                                    color = '#66BB6A' if val == '✓' else '#EF5350' if val == '✗' else ''
-                                    return f'color: {color}'
-
-                                def highlight_similarity(val):
-                                    try:
-                                        similarity_value = float(val[:-1]) / 100
-                                        if similarity_value >= 0.8:
-                                            background = '#388E3C'
-                                            color = 'white'
-                                        elif similarity_value >= 0.6:
-                                            background = '#F9A825'
-                                            color = 'black'
-                                        else:
-                                            background = '#D32F2F'
-                                            color = 'white'
-                                        return f'background-color: {background}; color: {color}'
-                                    except (ValueError, TypeError):
-                                        return ''
-
-                                styled_df = metrics_df.style.applymap(highlight_matches, subset=['Match'])\
-                                    .applymap(highlight_similarity, subset=['Similarity'])
-
-                                st.dataframe(styled_df, use_container_width=True)
-                                
-                                avg_precision = metrics_df['Precision'].mean()
-                                avg_recall = metrics_df['Recall'].mean()
-                                
-                                col1, col2 = st.columns(2)
-                                with col1:
-                                    st.metric("Average Precision", f"{avg_precision:.2%}" if not np.isnan(avg_precision) else "N/A")
-                                with col2:
-                                    st.metric("Average Recall", f"{avg_recall:.2%}" if not np.isnan(avg_recall) else "N/A")
-                            else:
-                                st.write(f"No comparable data found in {section}")
-                        else:
-                            metrics = calculate_comparison_metrics(human_data, llm_data)
+                for section, human_data in human_annotation.items():
+                    llm_data = llm_annotation.get(section, {})
+                    if isinstance(human_data, dict):
+                        metrics_df = compare_dictionaries(human_data, llm_data)
+                        if not metrics_df.empty:
                             st.write(f"### {section} Metrics")
-                            st.write(f"Match: {metrics['match']}, Similarity: {metrics['similarity']}, Precision: {metrics['precision']:.2%}, Recall: {metrics['recall']:.2%}")
+
+                            def highlight_matches(val):
+                                color = '#66BB6A' if val == '✓' else '#EF5350' if val == '✗' else ''
+                                return f'color: {color}'
+
+                            def highlight_similarity(val):
+                                try:
+                                    similarity_value = float(val[:-1]) / 100
+                                    if similarity_value >= 0.8:
+                                        background = '#388E3C'
+                                        color = 'white'
+                                    elif similarity_value >= 0.6:
+                                        background = '#F9A825'
+                                        color = 'black'
+                                    else:
+                                        background = '#D32F2F'
+                                        color = 'white'
+                                    return f'background-color: {background}; color: {color}'
+                                except (ValueError, TypeError):
+                                    return ''
+
+                            styled_df = metrics_df.style.applymap(highlight_matches, subset=['Match']) \
+                                                .applymap(highlight_similarity, subset=['Similarity'])
+
+                            st.dataframe(styled_df, use_container_width=True)
+
+                            # Append section-wise metrics to overall metrics
+                            overall_metrics["precision"].append(metrics_df['Precision'].mean())
+                            overall_metrics["recall"].append(metrics_df['Recall'].mean())
+
+                        else:
+                            st.write(f"No comparable data found in {section}")
+                    else:
+                        metrics = calculate_comparison_metrics(human_data, llm_data)
+                        st.write(f"### {section} Metrics")
+                        st.write(f"Match: {metrics['match']}, Similarity: {metrics['similarity']}, Precision: {metrics['precision']:.2%}, Recall: {metrics['recall']:.2%}")
+
+                # Calculate overall average metrics after iterating through all sections
+                overall_precision = np.mean(overall_metrics["precision"]) if overall_metrics["precision"] else np.nan
+                overall_recall = np.mean(overall_metrics["recall"]) if overall_metrics["recall"] else np.nan
+
+                st.write("### Overall Metrics")
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric("Average Precision", f"{overall_precision:.2%}" if not np.isnan(overall_precision) else "N/A")
+                with col2:
+                    st.metric("Average Recall", f"{overall_recall:.2%}" if not np.isnan(overall_recall) else "N/A")
+
             else:
-                    st.info("No matching LLM annotation found for this call ID.")
+                st.info("No matching LLM annotation found for this call ID.")
         else:
-            st.info("📝 No annotations available for comparison.")
+            st.info(" No annotations available for comparison.")
 
 
 if __name__ == "__main__":
