@@ -17,6 +17,7 @@ from fuzzywuzzy import fuzz
 from sentence_transformers import SentenceTransformer, util
 import json
 import numpy as np
+from dateutil import parser
 
 # Custom CSS for better styling
 def local_css():
@@ -341,7 +342,7 @@ def load_dummy_llm_data():
             "Bonds": {"percentage": 30, "amount": 75000},
             "Cash": {"percentage": 10, "amount": 25000},
             "Real Estate": {"percentage": 0, "amount": 0},
-            "Other": {"percentage": 0, "amount": 0}
+            "Other": np.nan#{"percentage": 0, "amount": 0}
         },
         "Interaction Summary": {
             "Topics": ["Contribution Rates", "Investment Options", "Risk Management"],
@@ -377,6 +378,47 @@ def safely_convert_to_string(value):
         return str(value)
     except:
         return repr(value)
+
+def compare_dates(date_str1, date_str2, tolerance_days=0):
+    """Compares two date strings and returns comparison metrics."""
+    try:
+        date1 = parser.parse(date_str1)
+        date2 = parser.parse(date_str2)
+
+        difference = abs((date1 - date2).days)
+        match = difference <= tolerance_days
+        similarity = 1 - (difference / 365)  # Simple similarity based on year difference (can be improved)
+        similarity = max(0, min(1, similarity)) # Ensure similarity is within 0 and 1
+        precision = similarity if match else np.nan
+        match_output = "✓" if match else "✗"
+        similarity_output = f"{similarity * 100:.2f}%"
+        return {
+            "match": match_output,
+            "similarity": similarity_output,
+            "precision": precision,
+            "recall": similarity,
+            "comparison_method": "Date Comparison",
+            "is_populated": True
+        }
+
+    except (ValueError, TypeError):
+        return {
+            "match": "✗",
+            "similarity": "0%",
+            "precision": np.nan,
+            "recall": 0,
+            "comparison_method": "Date Comparison",
+            "is_populated": False
+        }
+
+def is_date(string, fuzzy=False):
+
+    try: 
+        parser.parse(string, fuzzy=fuzzy)
+        return True
+
+    except ValueError:
+        return False
 
 def calculate_semantic_similarity(text1, text2, threshold=0.7):
     """Calculates semantic similarity, ensuring 1.0 for identical strings."""
@@ -414,37 +456,71 @@ def calculate_fuzzy_similarity(str1, str2):
 
 def calculate_comparison_metrics(human_value, llm_value, threshold=0.7):
     """Calculates comparison metrics based on data types."""
-    if human_value is None and llm_value is None:
-        return {"match": "N/A", "similarity": "0%", "precision": 0, "recall": 0, "comparison_method": "N/A", "is_populated": False}
-    if human_value is None or llm_value is None:
-        return {"match": "✗", "similarity": "0%", "precision": 0, "recall": 0, "comparison_method": "N/A", "is_populated": False}
 
-    if isinstance(human_value, list) and isinstance(llm_value, list):
+    if human_value is None and llm_value is None:
+        return {"match": "N/A", "similarity": "N/A", "precision": np.nan, "recall": np.nan, "comparison_method": "N/A", "is_populated": False}
+    if human_value is None or llm_value is None:
+        return {"match": "✗", "similarity": "0%", "precision": np.nan, "recall": 0, "comparison_method": "N/A", "is_populated": False}
+
+    if isinstance(human_value, str) and isinstance(llm_value, str):
+        if not human_value.strip() and not llm_value.strip():
+            return {"match": "N/A", "similarity": "N/A", "precision": np.nan, "recall": np.nan, "comparison_method": "N/A", "is_populated": False}
+        if is_date(human_value) and is_date(llm_value): #check for date before sending to compare_dates
+            date_comparison = compare_dates(human_value, llm_value)
+            return date_comparison
+        else:
+            try:
+                if llm_value.strip():
+                    similarity = calculate_semantic_similarity(human_value, llm_value, threshold)
+                    match = similarity >= threshold
+                    precision = similarity if match else np.nan
+                    match_output = "✓" if match else "✗"
+                    similarity_output = f"{similarity * 100:.2f}%"
+                    return {"match": match_output, "similarity": similarity_output, "precision": precision, "recall": similarity, "comparison_method": "Semantic Similarity", "is_populated": True}
+                else:
+                    return {"match": "✗", "similarity": "0%", "precision": np.nan, "recall": 0, "comparison_method": "Semantic Similarity", "is_populated": False}
+
+            except:
+                human_str = safely_convert_to_string(human_value)
+                llm_str = safely_convert_to_string(llm_value)
+                if llm_str.strip():
+                    similarity = calculate_fuzzy_similarity(human_str, llm_str)
+                    match = similarity >= threshold
+                    precision = similarity if match else np.nan
+                    match_output = "✓" if match else "✗"
+                    similarity_output = f"{similarity * 100:.2f}%"
+                    return {"match": match_output, "similarity": similarity_output, "precision": precision, "recall": similarity, "comparison_method": "Fuzzy Matching", "is_populated": True}
+                else:
+                    return {"match": "✗", "similarity": "0%", "precision": np.nan, "recall": 0, "comparison_method": "Fuzzy Matching", "is_populated": False}
+
+    elif isinstance(human_value, list) and isinstance(llm_value, list):
         if all(isinstance(item, dict) for item in human_value) and all(isinstance(item, dict) for item in llm_value):
-            return compare_list_of_dictionaries(human_value, llm_value, threshold) # Call for list of dictionaries
+            return compare_list_of_dictionaries(human_value, llm_value, threshold)
         elif all(isinstance(item, str) for item in human_value) and all(isinstance(item, str) for item in llm_value):
-            return compare_lists(human_value, llm_value, threshold) # Call for list of strings
+            return compare_lists(human_value, llm_value, threshold)
         else:
             human_str = safely_convert_to_string(human_value)
             llm_str = safely_convert_to_string(llm_value)
+            if llm_str.strip(): #check if llm value is not empty then only calculate similarity
+                similarity = calculate_fuzzy_similarity(human_str, llm_str)
+                match = similarity >= threshold
+                precision = similarity if match else np.nan #set precision as nan if there is no match
+                return {"match": "✓" if match else "✗", "similarity": f"{similarity * 100:.2f}%", "precision": precision, "recall": similarity, "comparison_method": "Fuzzy Matching", "is_populated": True}
+            else:
+                 return {"match": "✗", "similarity": "0%", "precision": np.nan, "recall": 0, "comparison_method": "Fuzzy Matching", "is_populated": False}
+
+    elif isinstance(human_value, dict) and isinstance(llm_value, dict):
+        return compare_dictionaries_values(human_value, llm_value, threshold)
+    else:
+        human_str = safely_convert_to_string(human_value)
+        llm_str = safely_convert_to_string(llm_value)
+        if llm_str.strip(): #check if llm value is not empty then only calculate similarity
             similarity = calculate_fuzzy_similarity(human_str, llm_str)
             match = similarity >= threshold
-            return {"match": "✓" if match else "✗", "similarity": f"{similarity * 100:.2f}%", "precision": similarity, "recall": similarity, "comparison_method": "Fuzzy Matching", "is_populated": True}
-
-    if isinstance(human_value, dict) and isinstance(llm_value, dict):
-        return compare_dictionaries_values(human_value, llm_value, threshold)
-
-    if isinstance(human_value, str) and isinstance(llm_value, str):
-        similarity = calculate_semantic_similarity(human_value, llm_value, threshold)
-        match = similarity >= threshold
-        return {"match": "✓" if match else "✗", "similarity": f"{similarity * 100:.2f}%", "precision": similarity, "recall": similarity, "comparison_method": "Semantic Similarity", "is_populated": True}
-    
-    # Default to fuzzy matching for all other types
-    human_str = safely_convert_to_string(human_value)
-    llm_str = safely_convert_to_string(llm_value)
-    similarity = calculate_fuzzy_similarity(human_str, llm_str)
-    match = similarity >= threshold
-    return {"match": "✓" if match else "✗", "similarity": f"{similarity * 100:.2f}%", "precision": similarity, "recall": similarity, "comparison_method": "Fuzzy Matching", "is_populated": True}
+            precision = similarity if match else np.nan #set precision as nan if there is no match
+            return {"match": "✓" if match else "✗", "similarity": f"{similarity * 100:.2f}%", "precision": precision, "recall": similarity, "comparison_method": "Fuzzy Matching", "is_populated": True}
+        else:
+            return {"match": "✗", "similarity": "0%", "precision": np.nan, "recall": 0, "comparison_method": "Fuzzy Matching", "is_populated": False}
 
 def compare_lists(human_value, llm_value, threshold=0.7):
     """Compares lists using semantic similarity and calculates precision/recall (order-independent)."""
@@ -570,120 +646,75 @@ def compare_dictionaries_values(human_data, llm_data, threshold=0.7):
         return {"match": "✗", "similarity": "0%", "precision": 0, "recall": 0, "comparison_method": "Dictionary Comparison", "is_populated": True}
 
 def compare_dictionaries(human_data, llm_data, threshold=0.7):
-    """
-    Compares two dictionaries, using appropriate comparison methods based on data type.
-
-    Args:
-        human_data: The human-annotated dictionary.
-        llm_data: The LLM-generated dictionary.
-        threshold: The similarity threshold for string comparisons.
-
-    Returns:
-        A Pandas DataFrame containing comparison metrics for each key, 
-        or an empty DataFrame if input is invalid or no comparable data is found.
-    """
     metrics_data = []
-    overall_precision = 0
-    overall_recall = 0
-    populated_llm_count = 0
-    populated_human_count = 0
+    overall_precision_values = []
+    overall_recall_values = []
 
     if not isinstance(human_data, dict) or not isinstance(llm_data, dict):
-        return pd.DataFrame()  # Return empty DataFrame for invalid input
+        return pd.DataFrame(), np.nan, np.nan
+
+    compared_keys = set(human_data.keys()).intersection(llm_data.keys())
+    num_compared_keys = len(compared_keys)
 
     for key in human_data.keys():
         human_value = human_data.get(key)
         llm_value = llm_data.get(key)
-        try:
-            # Convert human_value to a list if it's a NumPy array
-            if isinstance(human_value, np.ndarray):
-                human_value = human_value.tolist()  # This is the crucial line
 
-            comparison_method = "Fuzzy Matching"  # Default is now fuzzy matching
-            if isinstance(human_value, str) and isinstance(llm_value, str):
-                # print(f"Calling calculate_comparison_metrics for key: {key} (String comparison)")
-                metrics = calculate_comparison_metrics(human_value, llm_value, threshold)
-                comparison_method = metrics["comparison_method"] # Overide if it is string
-            elif isinstance(human_value, list) and isinstance(llm_value, list):
-                # print(f"Calling calculate_comparison_metrics for key: {key} (List comparison)")
-                metrics = calculate_comparison_metrics(human_value, llm_value, threshold)
-                comparison_method = "List Comparison"
-            elif isinstance(human_value, dict) and isinstance(llm_value, dict):
-                # print(f"Calling calculate_comparison_metrics for key: {key} (Dictionary comparison)")
-                inner_metrics_df, _, _  = compare_dictionaries(human_value, llm_value, threshold)
-                if not inner_metrics_df.empty:
-                    avg_precision = inner_metrics_df['Precision'].mean()
-                    avg_recall = inner_metrics_df['Recall'].mean()
-                    avg_similarity = (avg_precision + avg_recall) / 2 if not np.isnan(avg_precision) and not np.isnan(avg_recall) else np.nan #calculate average similarity
-                    if not np.isnan(avg_similarity):
-                        match = avg_similarity >= threshold
-                        metrics = {
-                            "match": "✓" if match else "✗",
-                            "similarity": f"{avg_similarity * 100:.2f}%",
-                            "precision": avg_precision,
-                            "recall": avg_recall,
-                            "comparison_method": "Dictionary Comparison",
-                            "is_populated": True
-                        }
-                    else:
-                        metrics = {
-                            "match": "N/A",
-                            "similarity": "N/A",
-                            "precision": avg_precision,
-                            "recall": avg_recall,
-                            "comparison_method": "Dictionary Comparison",
-                            "is_populated": True
-                        }
-                else:
-                    continue
-            else:  # All other types now use fuzzy matching
-                # print(f"human_value type: {type(human_value)}, llm_value type: {type(llm_value)} for key: {key}") #add this
-                # print(f"human_value: {human_value}, llm_value: {llm_value} for key: {key}") #add this
-                # print(f"Calling calculate_comparison_metrics for key: {key} (Default comparison)")
-                metrics = calculate_comparison_metrics(human_value, llm_value, threshold)
-                comparison_method = metrics["comparison_method"]
+        if isinstance(human_value, np.ndarray):
+            human_value = human_value.tolist()
+
+        try:
+            comparison_method = "Fuzzy Matching"
+            metrics = {  # Initialize metrics with default NaN values
+                "match": "N/A",
+                "similarity": "N/A",
+                "precision": np.nan,
+                "recall": np.nan,
+                "comparison_method": comparison_method,
+                "is_populated": False
+            }
+            if key in llm_data:
+                if isinstance(human_value, list) and isinstance(llm_value, list) and all(isinstance(x, str) for x in human_value) and all(isinstance(x, str) for x in llm_value):
+                    metrics = calculate_comparison_metrics(human_value, llm_value, threshold)
+                    comparison_method = "List Comparison"
+                elif isinstance(human_value, dict) and isinstance(llm_value, dict):
+                    inner_metrics, inner_precision, inner_recall = compare_dictionaries(human_value, llm_value, threshold)
+                    comparison_method = "Dictionary Comparison"
+                    metrics["precision"] = inner_precision
+                    metrics["recall"] = inner_recall
+                    metrics["is_populated"] = True
+                elif isinstance(human_value, str) and isinstance(llm_value, str): #handle string comparison
+                    metrics = calculate_comparison_metrics(human_value, llm_value, threshold)
+                    comparison_method = metrics["comparison_method"]
+                else: #handle other data types with fuzzy matching
+                    metrics = calculate_comparison_metrics(human_value, llm_value, threshold)
+                    comparison_method = metrics["comparison_method"]
+
+                if not np.isnan(metrics["precision"]):
+                    overall_precision_values.append(metrics["precision"])
+                if not np.isnan(metrics["recall"]):
+                    overall_recall_values.append(metrics["recall"])
 
             metrics_data.append({
                 "Key": key,
                 "Human Value": safely_convert_to_string(human_value),
                 "LLM Value": safely_convert_to_string(llm_value),
-                "Match": metrics['match'],
-                "Similarity": metrics['similarity'],
-                "Precision": metrics['precision'],
-                "Recall": metrics['recall'],
+                "Match": metrics.get('match','N/A'),
+                "Similarity": metrics.get('similarity','N/A'),
+                "Precision": metrics.get('precision',np.nan),
+                "Recall": metrics.get('recall',np.nan),
                 "Comparison Method": comparison_method
             })
-
-            if metrics["is_populated"]:
-                if llm_value is not None:
-                    populated_llm_count += 1
-                    overall_precision += metrics["precision"]
-
-                if human_value is not None:
-                    populated_human_count += 1
-                    overall_recall += metrics["recall"]
 
         except Exception as e:
             print(f"Error processing key {key}: {e}")
             continue
 
     metrics_df = pd.DataFrame(metrics_data)
-    if populated_llm_count > 0:
-        avg_precision = overall_precision / populated_llm_count
-    else:
-        avg_precision = np.nan
+    avg_precision = np.nanmean(overall_precision_values) if overall_precision_values else np.nan
+    avg_recall = np.nanmean(overall_recall_values) if overall_recall_values else np.nan
 
-    if populated_human_count > 0:
-        avg_recall = overall_recall / populated_human_count
-    else:
-        avg_recall = np.nan
-
-    # print(f"Average Precision (populated LLM attributes): {avg_precision:.2%}")
-    # print(f"Average Recall (populated human attributes): {avg_recall:.2%}")
-    # print(f"Total LLM populated attributes: {populated_llm_count}")
-    # print(f"Total human annotation populated attributes: {populated_human_count}")
-
-    return metrics_df, avg_precision, avg_recall # Return avg_precision and avg_recall
+    return metrics_df, avg_precision, avg_recall
 
 def load_transcripts_from_csv(csv_path):
     try:
