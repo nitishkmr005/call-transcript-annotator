@@ -446,31 +446,50 @@ def calculate_dict_list_metrics(human_value, llm_value, threshold=0.7):
         "recall": recall
     }
 
+def load_transcripts_from_csv(csv_path):
+    try:
+        df = pd.read_csv(csv_path)
+        # Ensure 'Call ID' is a string for consistent handling
+        df['Call ID'] = df['Call ID'].astype(str)
+        return df
+    except FileNotFoundError:
+        st.error(f"CSV file not found at: {csv_path}")
+        return pd.DataFrame() # Return empty DataFrame to prevent errors
+    except pd.errors.EmptyDataError:
+        st.error(f"CSV file is empty: {csv_path}")
+        return pd.DataFrame()
+    except pd.errors.ParserError:
+        st.error(f"Error parsing CSV file: {csv_path}. Check the format.")
+        return pd.DataFrame()
+
 def main():
     st.set_page_config(layout="wide", page_title="Call Transcript Annotation", page_icon="📞")
     local_css()
-    global model 
+    global model
     model = SentenceTransformer('all-MiniLM-L6-v2')
     
-    # Initialize session state from parquet file
     if 'annotations' not in st.session_state:
         st.session_state.annotations = load_annotations_from_parquet()
 
-    # Sample transcript data
-    transcript = [
-        {"speaker": "Agent", "text": "Hello! Thank you for calling. How may I help you today?", "time": "10:01"},
-        {"speaker": "Customer", "text": "Hi, I'm having issues with my account login.", "time": "10:02"},
-        {"speaker": "Agent", "text": "I understand. Can you please provide your account number?", "time": "10:02"},
-        {"speaker": "Customer", "text": "Yes, it's 12345678.", "time": "10:03"}
-    ]
+    csv_path = "transcripts.csv"  # Path to your CSV file
+    transcripts_df = load_transcripts_from_csv(csv_path)
+
+    if transcripts_df.empty:
+        st.stop() # Stop execution if there's an error with CSV loading
 
     st.markdown('<h1 class="main-header">📞 Call Transcript Annotation Tool</h1>', unsafe_allow_html=True)
-    
+
+    call_ids = transcripts_df['Call ID'].unique().tolist()
+    selected_call_id = st.selectbox("Select Call ID", call_ids)
+
+    selected_transcript = transcripts_df[transcripts_df['Call ID'] == selected_call_id]
+    transcript = selected_transcript.to_dict('records')
+
     tabs = st.tabs(["📝 Transcript & Annotation", "📊 View Annotations", "🤖 LLM Evaluation"])
-    
-    with tabs[0]:
+
+    with tabs[0]:  # Transcript & Annotation
         col1, col2 = st.columns([0.6, 0.4])
-        
+
         with col1:
             st.markdown('<h3 class="section-header">Call Transcript</h3>', unsafe_allow_html=True)
             for entry in transcript:
@@ -489,12 +508,12 @@ def main():
                         unsafe_allow_html=True
                     )
 
-        with col2:
+        with col2: #Annotation Form
             st.markdown('<h3 class="section-header">Call Annotation</h3>', unsafe_allow_html=True)
-            
+            # Prefill Call ID in the form
             with st.form("annotation_form", clear_on_submit=True):
-                # Basic Call Information
                 with st.expander("📞 Basic Call Information", expanded=True):
+                    call_id = st.text_input("Call ID", value=selected_call_id, disabled=True) #Prefilled
                     col3, col4 = st.columns(2)
                     with col3:
                         call_id = st.text_input("Call ID")
@@ -677,76 +696,152 @@ def main():
         else:
             st.info("📝 No annotations submitted yet.")
 
-
-
-    with tabs[2]:
+    with tabs[2]:  # LLM Evaluation (Modified for Dark Theme)
         st.markdown('<h3 class="section-header">LLM Evaluation Comparison</h3>', unsafe_allow_html=True)
-        
-        if st.session_state.annotations:
-            # Create three columns for comparison
-            col_human, col_llm, col_metrics = st.columns(3)
-            
-            with col_human:
-                st.markdown('<h4 class="subsection-header">Human Annotation</h4>', unsafe_allow_html=True)
-                human_annotation = st.session_state.annotations[-1]  # Get latest annotation
-                
-                # Display human annotations in an organized way
-                for section, data in human_annotation.items():
-                    with st.expander(f"📋 {section}", expanded=True):
-                        if isinstance(data, dict):
-                            for key, value in data.items():
-                                st.write(f"**{key}:** {value}")
-                        else:
-                            st.write(f"**{section}:** {data}")
-            
-            with col_llm:
-                st.markdown('<h4 class="subsection-header">LLM Generated Annotation</h4>', unsafe_allow_html=True)
-                llm_annotation = load_dummy_llm_data()
-                
-                # Display LLM annotations
-                for section, data in llm_annotation.items():
-                    with st.expander(f"🤖 {section}", expanded=True):
-                        if isinstance(data, dict):
-                            for key, value in data.items():
-                                st.write(f"**{key}:** {value}")
-                        else:
-                            st.write(f"**{section}:** {data}")
-            
-            with col_metrics:
-                st.markdown('<h4 class="subsection-header">Comparison Metrics</h4>', unsafe_allow_html=True)
-                
-                # Calculate and display metrics for each section
-                overall_metrics = {"precision": [], "recall": []}
 
-                for section, human_data in human_annotation.items():
-                    with st.expander(f"📊 {section} Metrics", expanded=True):
-                        if isinstance(human_data, dict):
-                            for key, human_value in human_data.items():
-                                llm_value = llm_annotation.get(section, {}).get(key)
-                                metrics = calculate_metrics(human_value, llm_value)
-                                
-                                st.write(f"**{key}** {metrics['match']} ({metrics['similarity']})")
-                                col1, col2 = st.columns(2)
-                                with col1:
-                                    st.metric("Precision", f"{metrics['precision']:.2%}")
-                                with col2:
-                                    st.metric("Recall", f"{metrics['recall']:.2%}")
-                                
-                                overall_metrics["precision"].append(metrics["precision"])
-                                overall_metrics["recall"].append(metrics["recall"])
-                
-                # Display overall metrics
+        if st.session_state.annotations:
+            human_annotation = st.session_state.annotations[-1]
+            llm_annotation = load_dummy_llm_data()
+
+            comparison_data = []
+            overall_metrics = {"precision": [], "recall": []}
+
+            for section, human_data in human_annotation.items():
+                if isinstance(human_data, dict):
+                    for key, human_value in human_data.items():
+                        llm_value = llm_annotation.get(section, {}).get(key)
+                        metrics = calculate_metrics(human_value, llm_value)
+
+                        comparison_data.append({
+                            "Section": section,
+                            "Attribute": key,
+                            "Human Value": human_value,
+                            "LLM Value": llm_value,
+                            "Match": metrics['match'],
+                            "Similarity": metrics['similarity'],
+                            "Precision": f"{metrics['precision']:.2%}",
+                            "Recall": f"{metrics['recall']:.2%}"
+                        })
+                        overall_metrics["precision"].append(metrics["precision"])
+                        overall_metrics["recall"].append(metrics["recall"])
+
+            if comparison_data:
+                df_comparison = pd.DataFrame(comparison_data)
+
+                # Apply styling for dark theme visualization
+                def highlight_matches(val):
+                    color = '#66BB6A' if val == '✓' else '#EF5350' if val == '✗' else ''  # Darker green and red
+                    return f'color: {color}'
+
+                def highlight_similarity(val):
+                    try:
+                        similarity_value = float(val[:-1]) / 100
+                        if similarity_value >= 0.8:
+                            background = '#388E3C'  # Darker Green
+                            color = 'white'
+                        elif similarity_value >= 0.6:
+                            background = '#F9A825'  # Darker Amber/Orange
+                            color = 'black'
+                        else:
+                            background = '#D32F2F'  # Darker Red
+                            color = 'white'
+                        return f'background-color: {background}; color: {color}'
+                    except (ValueError, TypeError):
+                        return ''
+
+                styled_df = df_comparison.style.applymap(highlight_matches, subset=['Match'])\
+                    .applymap(highlight_similarity, subset=['Similarity'])
+
+                st.dataframe(styled_df, use_container_width=True)
+
                 st.markdown("### Overall Performance")
-                avg_precision = sum(overall_metrics["precision"]) / len(overall_metrics["precision"])
-                avg_recall = sum(overall_metrics["recall"]) / len(overall_metrics["recall"])
-                
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.metric("Average Precision", f"{avg_precision:.2%}")
-                with col2:
-                    st.metric("Average Recall", f"{avg_recall:.2%}")
+                if overall_metrics["precision"]:
+                    avg_precision = sum(overall_metrics["precision"]) / len(overall_metrics["precision"])
+                    avg_recall = sum(overall_metrics["recall"]) / len(overall_metrics["recall"])
+
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.metric("Average Precision", f"{avg_precision:.2%}")
+                    with col2:
+                        st.metric("Average Recall", f"{avg_recall:.2%}")
+                else:
+                    st.write("No metrics to display yet.")
+            else:
+                st.info("No data to compare.")
+
         else:
             st.info("📝 No annotations available for comparison.")
+
+
+    # with tabs[2]:
+    #     st.markdown('<h3 class="section-header">LLM Evaluation Comparison</h3>', unsafe_allow_html=True)
+        
+    #     if st.session_state.annotations:
+    #         # Create three columns for comparison
+    #         col_human, col_llm, col_metrics = st.columns(3)
+            
+    #         with col_human:
+    #             st.markdown('<h4 class="subsection-header">Human Annotation</h4>', unsafe_allow_html=True)
+    #             human_annotation = st.session_state.annotations[-1]  # Get latest annotation
+                
+    #             # Display human annotations in an organized way
+    #             for section, data in human_annotation.items():
+    #                 with st.expander(f"📋 {section}", expanded=True):
+    #                     if isinstance(data, dict):
+    #                         for key, value in data.items():
+    #                             st.write(f"**{key}:** {value}")
+    #                     else:
+    #                         st.write(f"**{section}:** {data}")
+            
+    #         with col_llm:
+    #             st.markdown('<h4 class="subsection-header">LLM Generated Annotation</h4>', unsafe_allow_html=True)
+    #             llm_annotation = load_dummy_llm_data()
+                
+    #             # Display LLM annotations
+    #             for section, data in llm_annotation.items():
+    #                 with st.expander(f"🤖 {section}", expanded=True):
+    #                     if isinstance(data, dict):
+    #                         for key, value in data.items():
+    #                             st.write(f"**{key}:** {value}")
+    #                     else:
+    #                         st.write(f"**{section}:** {data}")
+            
+    #         with col_metrics:
+    #             st.markdown('<h4 class="subsection-header">Comparison Metrics</h4>', unsafe_allow_html=True)
+                
+    #             # Calculate and display metrics for each section
+    #             overall_metrics = {"precision": [], "recall": []}
+
+    #             for section, human_data in human_annotation.items():
+    #                 with st.expander(f"📊 {section} Metrics", expanded=True):
+    #                     if isinstance(human_data, dict):
+    #                         for key, human_value in human_data.items():
+    #                             llm_value = llm_annotation.get(section, {}).get(key)
+    #                             metrics = calculate_metrics(human_value, llm_value)
+                                
+    #                             st.write(f"**{key}** {metrics['match']} ({metrics['similarity']})")
+    #                             col1, col2 = st.columns(2)
+    #                             with col1:
+    #                                 st.metric("Precision", f"{metrics['precision']:.2%}")
+    #                             with col2:
+    #                                 st.metric("Recall", f"{metrics['recall']:.2%}")
+                                
+    #                             overall_metrics["precision"].append(metrics["precision"])
+    #                             overall_metrics["recall"].append(metrics["recall"])
+                
+    #             # Display overall metrics
+    #             st.markdown("### Overall Performance")
+    #             avg_precision = sum(overall_metrics["precision"]) / len(overall_metrics["precision"])
+    #             avg_recall = sum(overall_metrics["recall"]) / len(overall_metrics["recall"])
+                
+    #             col1, col2 = st.columns(2)
+    #             with col1:
+    #                 st.metric("Average Precision", f"{avg_precision:.2%}")
+    #             with col2:
+    #                 st.metric("Average Recall", f"{avg_recall:.2%}")
+    #     else:
+    #         st.info("📝 No annotations available for comparison.")
+
 
 if __name__ == "__main__":
     main()
