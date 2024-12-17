@@ -372,79 +372,29 @@ def calculate_fuzzy_similarity(str1, str2):
     return fuzz.partial_ratio(str1, str2) / 100
 
 def calculate_comparison_metrics(human_value, llm_value, threshold=0.7):
-    """
-    Calculates comparison metrics (match, similarity, precision, recall) 
-    between human and LLM values, handling different data types.
-
-    Args:
-        human_value: The human-annotated value.
-        llm_value: The LLM-generated value.
-        threshold: The similarity threshold.
-
-    Returns:
-        A dictionary containing the metrics: match (✓/✗/N/A), similarity (%), precision, recall, comparison_method, is_populated.
-    """
+    """Calculates comparison metrics based on data types, using fuzzy matching where applicable."""
     if human_value is None and llm_value is None:
-        return {
-            "match": "N/A",
-            "similarity": "0%",
-            "precision": 0,
-            "recall": 0,
-            "comparison_method": "N/A",
-            "is_populated": False
-        }
-    
+        return {"match": "N/A", "similarity": "0%", "precision": 0, "recall": 0, "comparison_method": "N/A", "is_populated": False}
     if human_value is None or llm_value is None:
-        return {
-            "match": "✗",
-            "similarity": "0%",
-            "precision": 0,
-            "recall": 0,
-            "comparison_method": "N/A",
-            "is_populated": False
-        }
-    
-    if isinstance(human_value, (int, float)) and isinstance(llm_value, (int, float)):
-        match = np.isclose(human_value, llm_value, rtol=1e-5)
-        similarity = 1.0 if match else 0.0
-        return {
-            "match": "✓" if match else "✗",
-            "similarity": f"{similarity * 100}%",
-            "precision": similarity,
-            "recall": similarity,
-            "comparison_method": "Direct Match",
-            "is_populated": True
-        }
-    
+        return {"match": "✗", "similarity": "0%", "precision": 0, "recall": 0, "comparison_method": "N/A", "is_populated": False}
+
     if isinstance(human_value, list) and isinstance(llm_value, list):
-        if all(isinstance(item, dict) for item in human_value) and all(isinstance(item, dict) for item in llm_value):
-            return compare_list_of_dictionaries(human_value, llm_value, threshold)
         return compare_lists(human_value, llm_value, threshold)
+
+    if isinstance(human_value, dict) and isinstance(llm_value, dict):
+        return compare_dictionaries(human_value, llm_value, threshold)
 
     if isinstance(human_value, str) and isinstance(llm_value, str):
         similarity = calculate_semantic_similarity(human_value, llm_value, threshold)
         match = similarity >= threshold
-        return {
-            "match": "✓" if match else "✗",
-            "similarity": f"{similarity * 100:.2f}%",
-            "precision": similarity,
-            "recall": similarity,
-            "comparison_method": "Semantic Similarity",
-            "is_populated": True
-        }
-
+        return {"match": "✓" if match else "✗", "similarity": f"{similarity * 100:.2f}%", "precision": similarity, "recall": similarity, "comparison_method": "Semantic Similarity", "is_populated": True}
+    
+    # Default to fuzzy matching for all other types (including numbers, booleans, etc.)
     human_str = safely_convert_to_string(human_value)
     llm_str = safely_convert_to_string(llm_value)
     similarity = calculate_fuzzy_similarity(human_str, llm_str)
     match = similarity >= threshold
-    return {
-        "match": "✓" if match else "✗",
-        "similarity": f"{similarity * 100:.2f}%",
-        "precision": similarity,
-        "recall": similarity,
-        "comparison_method": "Fuzzy Matching",
-        "is_populated": True
-    }
+    return {"match": "✓" if match else "✗", "similarity": f"{similarity * 100:.2f}%", "precision": similarity, "recall": similarity, "comparison_method": "Fuzzy Matching", "is_populated": True}
 
 def compare_lists(human_value, llm_value, threshold=0.7):
     """
@@ -567,26 +517,27 @@ def compare_dictionaries(human_data, llm_data, threshold=0.7):
     for key in human_data.keys():
         human_value = human_data.get(key)
         llm_value = llm_data.get(key)
-
         try:
-            comparison_method = "Direct Match"  # Default for boolean
+            comparison_method = "Fuzzy Matching"  # Default is now fuzzy matching
             if isinstance(human_value, str) and isinstance(llm_value, str):
                 metrics = calculate_comparison_metrics(human_value, llm_value, threshold)
-                comparison_method = metrics["comparison_method"]
+                comparison_method = metrics["comparison_method"] # Overide if it is string
             elif isinstance(human_value, list) and isinstance(llm_value, list):
                 metrics = calculate_comparison_metrics(human_value, llm_value, threshold)
                 comparison_method = "List Comparison"
             elif isinstance(human_value, dict) and isinstance(llm_value, dict):
                 inner_metrics_df = compare_dictionaries(human_value, llm_value, threshold)
                 if not inner_metrics_df.empty:
-                    avg_similarity = inner_metrics_df['Similarity'].apply(lambda x: float(x[:-1])/100 if isinstance(x, str) and x != "N/A" else x).mean()
-                    if not isinstance(avg_similarity, str):
+                    avg_precision = inner_metrics_df['Precision'].mean()
+                    avg_recall = inner_metrics_df['Recall'].mean()
+                    avg_similarity = (avg_precision + avg_recall) / 2 if not np.isnan(avg_precision) and not np.isnan(avg_recall) else np.nan #calculate average similarity
+                    if not np.isnan(avg_similarity):
                         match = avg_similarity >= threshold
                         metrics = {
                             "match": "✓" if match else "✗",
-                            "similarity": f"{avg_similarity*100:.2f}%", #Show the average similarity
-                            "precision": inner_metrics_df['Precision'].mean(),
-                            "recall": inner_metrics_df['Recall'].mean(),
+                            "similarity": f"{avg_similarity * 100:.2f}%",
+                            "precision": avg_precision,
+                            "recall": avg_recall,
                             "comparison_method": "Dictionary Comparison",
                             "is_populated": True
                         }
@@ -594,28 +545,16 @@ def compare_dictionaries(human_data, llm_data, threshold=0.7):
                         metrics = {
                             "match": "N/A",
                             "similarity": "N/A",
-                            "precision": inner_metrics_df['Precision'].mean(),
-                            "recall": inner_metrics_df['Recall'].mean(),
+                            "precision": avg_precision,
+                            "recall": avg_recall,
                             "comparison_method": "Dictionary Comparison",
                             "is_populated": True
                         }
                 else:
-                    continue #skip to the next key if inner dictionary does not have any comparable values
-            elif isinstance(human_value, bool) and isinstance(llm_value, bool):
+                    continue
+            else:  # All other types now use fuzzy matching
                 metrics = calculate_comparison_metrics(human_value, llm_value, threshold)
                 comparison_method = metrics["comparison_method"]
-            else: # Handle other data types with fuzzy matching
-                human_str = safely_convert_to_string(human_value)
-                llm_str = safely_convert_to_string(llm_value)
-                similarity = calculate_fuzzy_similarity(human_str, llm_str)
-                metrics = {
-                    "match": "✓" if similarity >= threshold else "✗",
-                    "similarity": f"{similarity * 100:.2f}%",
-                    "precision": similarity,
-                    "recall": similarity,
-                    "comparison_method": "Fuzzy Matching",
-                    "is_populated": True
-                }
 
             metrics_data.append({
                 "Key": key,
