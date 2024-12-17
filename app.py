@@ -610,7 +610,7 @@ def compare_dictionaries(human_data, llm_data, threshold=0.7):
                 comparison_method = "List Comparison"
             elif isinstance(human_value, dict) and isinstance(llm_value, dict):
                 # print(f"Calling calculate_comparison_metrics for key: {key} (Dictionary comparison)")
-                inner_metrics_df = compare_dictionaries(human_value, llm_value, threshold)
+                inner_metrics_df, _, _  = compare_dictionaries(human_value, llm_value, threshold)
                 if not inner_metrics_df.empty:
                     avg_precision = inner_metrics_df['Precision'].mean()
                     avg_recall = inner_metrics_df['Recall'].mean()
@@ -683,8 +683,7 @@ def compare_dictionaries(human_data, llm_data, threshold=0.7):
     # print(f"Total LLM populated attributes: {populated_llm_count}")
     # print(f"Total human annotation populated attributes: {populated_human_count}")
 
-    return metrics_df
-
+    return metrics_df, avg_precision, avg_recall # Return avg_precision and avg_recall
 
 def load_transcripts_from_csv(csv_path):
     try:
@@ -947,12 +946,15 @@ def main():
             overall_metrics = {"precision": [], "recall": []}
 
             if llm_annotation:
-                overall_metrics = {"precision": [], "recall": []}
+                overall_precision_values = []
+                overall_recall_values = []
+                section_metrics = {}  # Store section-wise metrics
 
                 for section, human_data in human_annotation.items():
                     llm_data = llm_annotation.get(section, {})
+                    section_metrics[section] = {"precision": [], "recall": []} # Initialize section metrics
                     if isinstance(human_data, dict):
-                        metrics_df = compare_dictionaries(human_data, llm_data)
+                        metrics_df, avg_precision, avg_recall = compare_dictionaries(human_data, llm_data) # Get avg_precision and avg_recall
                         if not metrics_df.empty:
                             st.write(f"### {section} Metrics")
 
@@ -981,9 +983,17 @@ def main():
 
                             st.dataframe(styled_df, use_container_width=True)
 
-                            # Append section-wise metrics to overall metrics
-                            overall_metrics["precision"].append(metrics_df['Precision'].mean())
-                            overall_metrics["recall"].append(metrics_df['Recall'].mean())
+                            if not np.isnan(avg_precision):
+                                overall_precision_values.append(avg_precision)
+                                section_metrics[section]["precision"].append(avg_precision)
+                            if not np.isnan(avg_recall):
+                                overall_recall_values.append(avg_recall)
+                                section_metrics[section]["recall"].append(avg_recall)
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                st.metric(f"{section} Average Precision", f"{avg_precision:.2%}" if not np.isnan(avg_precision) else "N/A") #display section wise precision
+                            with col2:
+                                st.metric(f"{section} Average Recall", f"{avg_recall:.2%}" if not np.isnan(avg_recall) else "N/A") #display section wise recall
 
                         else:
                             st.write(f"No comparable data found in {section}")
@@ -991,12 +1001,57 @@ def main():
                         metrics = calculate_comparison_metrics(human_data, llm_data)
                         st.write(f"### {section} Metrics")
                         st.write(f"Match: {metrics['match']}, Similarity: {metrics['similarity']}, Precision: {metrics['precision']:.2%}, Recall: {metrics['recall']:.2%}")
+                        if not np.isnan(metrics["precision"]):
+                            overall_precision_values.append(metrics["precision"])
+                            section_metrics[section]["precision"].append(metrics["precision"])
+                        if not np.isnan(metrics["recall"]):
+                            overall_recall_values.append(metrics["recall"])
+                            section_metrics[section]["recall"].append(metrics["recall"])
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.metric(f"{section} Average Precision", f"{metrics['precision']:.2%}" if not np.isnan(metrics["precision"]) else "N/A") #display section wise precision
+                        with col2:
+                            st.metric(f"{section} Average Recall", f"{metrics['recall']:.2%}" if not np.isnan(metrics["recall"]) else "N/A") #display section wise recall
 
-                # Calculate overall average metrics after iterating through all sections
-                overall_precision = np.mean(overall_metrics["precision"]) if overall_metrics["precision"] else np.nan
-                overall_recall = np.mean(overall_metrics["recall"]) if overall_metrics["recall"] else np.nan
+              # Calculate overall average metrics after iterating through all sections
+                overall_precision_values = []
+                overall_recall_values = []
 
+                for section, human_data in human_annotation.items():
+                    llm_data = llm_annotation.get(section, {})
+                    if isinstance(human_data, dict):
+                        metrics_df, _, _  = compare_dictionaries(human_data, llm_data)
+                        if not metrics_df.empty:
+                            avg_precision = metrics_df['Precision'].mean()
+                            avg_recall = metrics_df['Recall'].mean()
+                            if not np.isnan(avg_precision):
+                                overall_precision_values.append(avg_precision)
+                            if not np.isnan(avg_recall):
+                                overall_recall_values.append(avg_recall)
+                
+                overall_precision = np.nanmean(overall_precision_values) if overall_precision_values else np.nan
+                overall_recall = np.nanmean(overall_recall_values) if overall_recall_values else np.nan
+                
                 st.write("### Overall Metrics")
+                # Display Calculation Steps
+                if overall_precision_values:
+                    st.write("**Precision Calculation Steps:**")
+                    st.write(f"1. Section-wise Precisions: {overall_precision_values}")
+                    st.write(f"2. Sum of Precisions: {sum(overall_precision_values):.2f}")
+                    st.write(f"3. Number of Sections with Valid Precision: {len(overall_precision_values)}")
+                    st.write(f"4. Overall Precision (Average): {overall_precision:.2%}")
+                else:
+                    st.write("**Precision Calculation Steps:** No valid precision values found.")
+
+                if overall_recall_values:
+                    st.write("**Recall Calculation Steps:**")
+                    st.write(f"1. Section-wise Recalls: {overall_recall_values}")
+                    st.write(f"2. Sum of Recalls: {sum(overall_recall_values):.2f}")
+                    st.write(f"3. Number of Sections with Valid Recall: {len(overall_recall_values)}")
+                    st.write(f"4. Overall Recall (Average): {overall_recall:.2%}")
+                else:
+                    st.write("**Recall Calculation Steps:** No valid recall values found.")
+                    
                 col1, col2 = st.columns(2)
                 with col1:
                     st.metric("Average Precision", f"{overall_precision:.2%}" if not np.isnan(overall_precision) else "N/A")
