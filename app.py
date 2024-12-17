@@ -16,6 +16,7 @@ from pathlib import Path
 from fuzzywuzzy import fuzz
 from sentence_transformers import SentenceTransformer, util
 import json
+import numpy as np
 
 # Custom CSS for better styling
 def local_css():
@@ -312,77 +313,250 @@ def load_dummy_llm_data():
     }
     return dummy_data
 
-# Semantic similarity function using sentence-transformers
-def semantic_similarity(text1, text2):
-    embeddings = model.encode([text1, text2], convert_to_tensor=True)
-    cosine_sim = util.pytorch_cos_sim(embeddings[0], embeddings[1]).item()
-    return cosine_sim
+# # Semantic similarity function using sentence-transformers
+# def semantic_similarity(text1, text2):
+#     embeddings = model.encode([text1, text2], convert_to_tensor=True)
+#     cosine_sim = util.pytorch_cos_sim(embeddings[0], embeddings[1]).item()
+#     return cosine_sim
 
-# Function to calculate precision and recall
+# # Function to calculate precision and recall
+# def calculate_metrics(human_value, llm_value, threshold=0.7):
+#     if isinstance(human_value, (int, float)) and isinstance(llm_value, (int, float)):
+#         # Simple case for numeric types
+#         match = human_value == llm_value
+#         similarity = 1 if match else 0
+#         precision = similarity
+#         recall = similarity
+#         return {
+#             "match": "✓" if match else "✗",
+#             "similarity": f"{similarity * 100}%",
+#             "precision": precision,
+#             "recall": recall
+#         }
+    
+#     elif isinstance(human_value, list) and isinstance(llm_value, list):
+#         # Handle case where both are lists (of strings, dicts, or mixed)
+#         if all(isinstance(item, dict) for item in human_value) and all(isinstance(item, dict) for item in llm_value):
+#             return calculate_dict_list_metrics(human_value, llm_value)
+#         else:
+#             return calculate_list_metrics(human_value, llm_value, threshold)
+    
+#     elif isinstance(human_value, str) and isinstance(llm_value, str):
+#         # Handle case where both are single strings
+#         similarity = semantic_similarity(human_value, llm_value)
+#         match = similarity >= threshold
+#         return {
+#             "match": "✓" if match else "✗",
+#             "similarity": f"{similarity * 100}%",
+#             "precision": similarity,
+#             "recall": similarity
+#         }
+    
+#     else:
+#         # Handle other unsupported or mixed types
+#         human_value = str(human_value)  # Convert to string if possible
+#         llm_value = str(llm_value)  # Convert to string if possible
+#         similarity = semantic_similarity(human_value, llm_value)
+#         match = similarity >= threshold
+#         return {
+#             "match": "✓" if match else "✗",
+#             "similarity": f"{similarity * 100}%",
+#             "precision": similarity,
+#             "recall": similarity
+#         }
+
+# def calculate_list_metrics(human_value, llm_value, threshold=0.7):
+#     """
+#     Function to handle lists of strings and calculate precision and recall for them.
+#     This compares the human and LLM paragraphs using semantic similarity.
+#     """
+#     true_positives = 0
+#     false_negatives = len(human_value)
+#     false_positives = len(llm_value)
+    
+#     # Ensure all items are strings before comparing
+#     human_value = [str(item) for item in human_value]
+#     llm_value = [str(item) for item in llm_value]
+    
+#     # Compare each human paragraph with all LLM paragraphs
+#     for human_paragraph in human_value:
+#         best_match = 0
+#         for llm_paragraph in llm_value:
+#             similarity = semantic_similarity(human_paragraph, llm_paragraph)
+#             best_match = max(best_match, similarity)
+        
+#         if best_match >= threshold:
+#             true_positives += 1
+#             false_negatives -= 1
+#             false_positives -= 1
+
+#     precision = true_positives / (true_positives + false_positives) if (true_positives + false_positives) > 0 else 0
+#     recall = true_positives / (true_positives + false_negatives) if (true_positives + false_negatives) > 0 else 0
+    
+#     return {
+#         "match": "✓" if precision == 1 and recall == 1 else "✗",
+#         "similarity": f"{(precision + recall) * 50}%",
+#         "precision": precision,
+#         "recall": recall
+#     }
+
+# def calculate_dict_list_metrics(human_value, llm_value, threshold=0.7):
+#     """
+#     Function to calculate precision and recall for comparing lists of dictionaries.
+#     This assumes each dictionary represents a key-value pair and checks for matches.
+#     If the dictionary values are strings, it calculates semantic similarity.
+#     """
+#     true_positives = 0
+#     false_negatives = len(human_value)
+#     false_positives = len(llm_value)
+    
+#     for human_dict in human_value:
+#         found_match = False
+#         for llm_dict in llm_value:
+#             # Check if the keys and values match between dictionaries
+#             if all(human_key in llm_dict for human_key in human_dict):
+#                 # Compare values (if they are strings, use semantic similarity)
+#                 matches = True
+#                 for human_key, human_value_str in human_dict.items():
+#                     llm_value_str = llm_dict.get(human_key, None)
+#                     if isinstance(human_value_str, str) and isinstance(llm_value_str, str):
+#                         similarity = semantic_similarity(human_value_str, llm_value_str)
+#                         if similarity < threshold:
+#                             matches = False
+#                             break
+#                     elif human_value_str != llm_value_str:
+#                         matches = False
+#                         break
+
+#                 if matches:
+#                     true_positives += 1
+#                     false_negatives -= 1
+#                     false_positives -= 1
+#                     found_match = True
+#                     break
+#         if found_match:
+#             continue
+    
+#     precision = true_positives / (true_positives + false_positives) if (true_positives + false_positives) > 0 else 0
+#     recall = true_positives / (true_positives + false_negatives) if (true_positives + false_negatives) > 0 else 0
+    
+#     return {
+#         "match": "✓" if precision == 1 and recall == 1 else "✗",
+#         "similarity": f"{(precision + recall) * 50}%",
+#         "precision": precision,
+#         "recall": recall
+#     }
+
+def safe_str_conversion(value):
+    """
+    Safely convert value to string, handling None and complex types
+    """
+    if value is None:
+        return ''
+    try:
+        return str(value)
+    except:
+        return repr(value)
+
+def semantic_similarity(text1, text2, threshold=0.7):
+    """
+    Calculate semantic similarity between two texts
+    """
+    # Convert to strings, handling None values
+    text1 = safe_str_conversion(text1)
+    text2 = safe_str_conversion(text2)
+    
+    # If both texts are empty, return 0
+    if not text1.strip() and not text2.strip():
+        return 0
+    
+    try:
+        embeddings = model.encode([text1, text2], convert_to_tensor=True)
+        cosine_sim = util.pytorch_cos_sim(embeddings[0], embeddings[1]).item()
+        return cosine_sim
+    except Exception as e:
+        print(f"Semantic similarity calculation error: {e}")
+        return 0
+
 def calculate_metrics(human_value, llm_value, threshold=0.7):
+    """
+    Calculate metrics for comparing human and LLM values
+    Handles different types and null values
+    """
+    # Early exit for None values
+    if human_value is None and llm_value is None:
+        return {
+            "match": "N/A",
+            "similarity": "0%",
+            "precision": 0,
+            "recall": 0,
+            "is_populated": False
+        }
+    
+    # Handle cases with one None value
+    if human_value is None or llm_value is None:
+        return {
+            "match": "✗",
+            "similarity": "0%",
+            "precision": 0,
+            "recall": 0,
+            "is_populated": False
+        }
+    
+    # Numeric comparison
     if isinstance(human_value, (int, float)) and isinstance(llm_value, (int, float)):
-        # Simple case for numeric types
-        match = human_value == llm_value
-        similarity = 1 if match else 0
-        precision = similarity
-        recall = similarity
-        return {
-            "match": "✓" if match else "✗",
-            "similarity": f"{similarity * 100}%",
-            "precision": precision,
-            "recall": recall
-        }
-    
-    elif isinstance(human_value, list) and isinstance(llm_value, list):
-        # Handle case where both are lists (of strings, dicts, or mixed)
-        if all(isinstance(item, dict) for item in human_value) and all(isinstance(item, dict) for item in llm_value):
-            return calculate_dict_list_metrics(human_value, llm_value)
-        else:
-            return calculate_list_metrics(human_value, llm_value, threshold)
-    
-    elif isinstance(human_value, str) and isinstance(llm_value, str):
-        # Handle case where both are single strings
-        similarity = semantic_similarity(human_value, llm_value)
-        match = similarity >= threshold
+        match = np.isclose(human_value, llm_value, rtol=1e-5)
+        similarity = 1.0 if match else 0.0
         return {
             "match": "✓" if match else "✗",
             "similarity": f"{similarity * 100}%",
             "precision": similarity,
-            "recall": similarity
+            "recall": similarity,
+            "is_populated": True
         }
     
-    else:
-        # Handle other unsupported or mixed types
-        human_value = str(human_value)  # Convert to string if possible
-        llm_value = str(llm_value)  # Convert to string if possible
-        similarity = semantic_similarity(human_value, llm_value)
-        match = similarity >= threshold
-        return {
-            "match": "✓" if match else "✗",
-            "similarity": f"{similarity * 100}%",
-            "precision": similarity,
-            "recall": similarity
-        }
+    # List comparison
+    if isinstance(human_value, list) and isinstance(llm_value, list):
+        # Check for list of dictionaries
+        if all(isinstance(x, dict) for x in human_value) and \
+           all(isinstance(x, dict) for x in llm_value):
+            return calculate_dict_list_metrics(human_value, llm_value, threshold)
+        
+        # Regular list comparison
+        return calculate_list_metrics(human_value, llm_value, threshold)
+    
+    # String or other type comparison
+    similarity = semantic_similarity(human_value, llm_value, threshold)
+    match = similarity >= threshold
+    
+    return {
+        "match": "✓" if match else "✗",
+        "similarity": f"{similarity * 100:.2f}%",
+        "precision": similarity,
+        "recall": similarity,
+        "is_populated": True
+    }
 
 def calculate_list_metrics(human_value, llm_value, threshold=0.7):
     """
-    Function to handle lists of strings and calculate precision and recall for them.
-    This compares the human and LLM paragraphs using semantic similarity.
+    Calculate metrics for lists with semantic similarity
     """
+    human_value = [safe_str_conversion(x) for x in human_value]
+    llm_value = [safe_str_conversion(x) for x in llm_value]
+    
     true_positives = 0
     false_negatives = len(human_value)
     false_positives = len(llm_value)
     
-    # Ensure all items are strings before comparing
-    human_value = [str(item) for item in human_value]
-    llm_value = [str(item) for item in llm_value]
-    
-    # Compare each human paragraph with all LLM paragraphs
-    for human_paragraph in human_value:
-        best_match = 0
-        for llm_paragraph in llm_value:
-            similarity = semantic_similarity(human_paragraph, llm_paragraph)
-            best_match = max(best_match, similarity)
+    for human_item in human_value:
+        if not human_item.strip():
+            false_negatives -= 1
+            continue
+        
+        best_match = max(
+            (semantic_similarity(human_item, llm_item) for llm_item in llm_value if llm_item.strip()),
+            default=0
+        )
         
         if best_match >= threshold:
             true_positives += 1
@@ -394,16 +568,15 @@ def calculate_list_metrics(human_value, llm_value, threshold=0.7):
     
     return {
         "match": "✓" if precision == 1 and recall == 1 else "✗",
-        "similarity": f"{(precision + recall) * 50}%",
+        "similarity": f"{(precision + recall) * 50:.2f}%",
         "precision": precision,
-        "recall": recall
+        "recall": recall,
+        "is_populated": True
     }
 
 def calculate_dict_list_metrics(human_value, llm_value, threshold=0.7):
     """
-    Function to calculate precision and recall for comparing lists of dictionaries.
-    This assumes each dictionary represents a key-value pair and checks for matches.
-    If the dictionary values are strings, it calculates semantic similarity.
+    Calculate metrics for lists of dictionaries
     """
     true_positives = 0
     false_negatives = len(human_value)
@@ -412,28 +585,21 @@ def calculate_dict_list_metrics(human_value, llm_value, threshold=0.7):
     for human_dict in human_value:
         found_match = False
         for llm_dict in llm_value:
-            # Check if the keys and values match between dictionaries
+            # Ensure all human_dict keys exist in llm_dict
             if all(human_key in llm_dict for human_key in human_dict):
-                # Compare values (if they are strings, use semantic similarity)
-                matches = True
-                for human_key, human_value_str in human_dict.items():
-                    llm_value_str = llm_dict.get(human_key, None)
-                    if isinstance(human_value_str, str) and isinstance(llm_value_str, str):
-                        similarity = semantic_similarity(human_value_str, llm_value_str)
-                        if similarity < threshold:
-                            matches = False
-                            break
-                    elif human_value_str != llm_value_str:
-                        matches = False
-                        break
-
+                matches = all(
+                    semantic_similarity(str(human_dict[key]), str(llm_dict.get(key, ''))) >= threshold
+                    for key in human_dict
+                )
+                
                 if matches:
                     true_positives += 1
                     false_negatives -= 1
                     false_positives -= 1
                     found_match = True
                     break
-        if found_match:
+        
+        if not found_match:
             continue
     
     precision = true_positives / (true_positives + false_positives) if (true_positives + false_positives) > 0 else 0
@@ -441,10 +607,73 @@ def calculate_dict_list_metrics(human_value, llm_value, threshold=0.7):
     
     return {
         "match": "✓" if precision == 1 and recall == 1 else "✗",
-        "similarity": f"{(precision + recall) * 50}%",
+        "similarity": f"{(precision + recall) * 50:.2f}%",
         "precision": precision,
-        "recall": recall
+        "recall": recall,
+        "is_populated": True
     }
+
+def compare_flat_dictionaries(human_data, llm_data, threshold=0.7):
+    """
+    Compare two flat dictionaries with different value types
+    """
+    metrics_data = []
+    overall_precision = 0
+    overall_recall = 0
+    populated_llm_count = 0
+    populated_human_count = 0
+
+    # Ensure inputs are dictionaries
+    if not isinstance(human_data, dict) or not isinstance(llm_data, dict):
+        raise ValueError("Both human_data and llm_data must be dictionaries")
+
+    for key in human_data.keys():
+        human_value = human_data.get(key)
+        llm_value = llm_data.get(key)
+        
+        try:
+            # Calculate metrics
+            metrics = calculate_metrics(human_value, llm_value, threshold)
+            
+            # Collect metrics data
+            metrics_data.append({
+                "Key": key,
+                "Human Value": safe_str_conversion(human_value),
+                "LLM Value": safe_str_conversion(llm_value),
+                "Match": metrics['match'],
+                "Similarity": metrics['similarity'],
+                "Precision": metrics['precision'],
+                "Recall": metrics['recall']
+            })
+            
+            # Update counts and metrics
+            if llm_value is not None:
+                populated_llm_count += 1
+                overall_precision += metrics["precision"]
+            
+            if human_value is not None:
+                populated_human_count += 1
+                overall_recall += metrics["recall"]
+        
+        except Exception as e:
+            print(f"Error processing key {key}: {e}")
+            continue
+
+    # Create DataFrame
+    metrics_df = pd.DataFrame(metrics_data)
+
+    # Calculate average metrics
+    avg_precision = overall_precision / populated_llm_count if populated_llm_count > 0 else 0
+    avg_recall = overall_recall / populated_human_count if populated_human_count > 0 else 0
+
+    # Print summary
+    print(f"Average Precision (populated LLM attributes): {avg_precision:.2%}")
+    print(f"Average Recall (populated human attributes): {avg_recall:.2%}")
+    print(f"Total LLM populated attributes: {populated_llm_count}")
+    print(f"Total human annotation populated attributes: {populated_human_count}")
+
+    return metrics_df
+
 
 def load_transcripts_from_csv(csv_path):
     try:
@@ -706,141 +935,60 @@ def main():
             comparison_data = []
             overall_metrics = {"precision": [], "recall": []}
 
-            for section, human_data in human_annotation.items():
-                if isinstance(human_data, dict):
-                    for key, human_value in human_data.items():
-                        llm_value = llm_annotation.get(section, {}).get(key)
-                        metrics = calculate_metrics(human_value, llm_value)
+            if llm_annotation:
+                    comparison_data = []
+                    overall_metrics = {"precision": [], "recall": []}
 
-                        comparison_data.append({
-                            "Section": section,
-                            "Attribute": key,
-                            "Human Value": human_value,
-                            "LLM Value": llm_value,
-                            "Match": metrics['match'],
-                            "Similarity": metrics['similarity'],
-                            "Precision": f"{metrics['precision']:.2%}",
-                            "Recall": f"{metrics['recall']:.2%}"
-                        })
-                        overall_metrics["precision"].append(metrics["precision"])
-                        overall_metrics["recall"].append(metrics["recall"])
+                    for section, human_data in human_annotation.items():
+                        llm_data = llm_annotation.get(section, {})
+                        if isinstance(human_data, dict):
+                            metrics_df = compare_flat_dictionaries(human_data, llm_data)
+                            if not metrics_df.empty:
+                                st.write(f"### {section} Metrics")
+                                
+                                def highlight_matches(val):
+                                    color = '#66BB6A' if val == '✓' else '#EF5350' if val == '✗' else ''
+                                    return f'color: {color}'
 
-            if comparison_data:
-                df_comparison = pd.DataFrame(comparison_data)
+                                def highlight_similarity(val):
+                                    try:
+                                        similarity_value = float(val[:-1]) / 100
+                                        if similarity_value >= 0.8:
+                                            background = '#388E3C'
+                                            color = 'white'
+                                        elif similarity_value >= 0.6:
+                                            background = '#F9A825'
+                                            color = 'black'
+                                        else:
+                                            background = '#D32F2F'
+                                            color = 'white'
+                                        return f'background-color: {background}; color: {color}'
+                                    except (ValueError, TypeError):
+                                        return ''
 
-                # Apply styling for dark theme visualization
-                def highlight_matches(val):
-                    color = '#66BB6A' if val == '✓' else '#EF5350' if val == '✗' else ''  # Darker green and red
-                    return f'color: {color}'
+                                styled_df = metrics_df.style.applymap(highlight_matches, subset=['Match'])\
+                                    .applymap(highlight_similarity, subset=['Similarity'])
 
-                def highlight_similarity(val):
-                    try:
-                        similarity_value = float(val[:-1]) / 100
-                        if similarity_value >= 0.8:
-                            background = '#388E3C'  # Darker Green
-                            color = 'white'
-                        elif similarity_value >= 0.6:
-                            background = '#F9A825'  # Darker Amber/Orange
-                            color = 'black'
+                                st.dataframe(styled_df, use_container_width=True)
+                                
+                                avg_precision = metrics_df['Precision'].mean()
+                                avg_recall = metrics_df['Recall'].mean()
+                                
+                                col1, col2 = st.columns(2)
+                                with col1:
+                                    st.metric("Average Precision", f"{avg_precision:.2%}" if not np.isnan(avg_precision) else "N/A")
+                                with col2:
+                                    st.metric("Average Recall", f"{avg_recall:.2%}" if not np.isnan(avg_recall) else "N/A")
+                            else:
+                                st.write(f"No comparable data found in {section}")
                         else:
-                            background = '#D32F2F'  # Darker Red
-                            color = 'white'
-                        return f'background-color: {background}; color: {color}'
-                    except (ValueError, TypeError):
-                        return ''
-
-                styled_df = df_comparison.style.applymap(highlight_matches, subset=['Match'])\
-                    .applymap(highlight_similarity, subset=['Similarity'])
-
-                st.dataframe(styled_df, use_container_width=True)
-
-                st.markdown("### Overall Performance")
-                if overall_metrics["precision"]:
-                    avg_precision = sum(overall_metrics["precision"]) / len(overall_metrics["precision"])
-                    avg_recall = sum(overall_metrics["recall"]) / len(overall_metrics["recall"])
-
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        st.metric("Average Precision", f"{avg_precision:.2%}")
-                    with col2:
-                        st.metric("Average Recall", f"{avg_recall:.2%}")
-                else:
-                    st.write("No metrics to display yet.")
+                            metrics = calculate_metrics(human_data, llm_data)
+                            st.write(f"### {section} Metrics")
+                            st.write(f"Match: {metrics['match']}, Similarity: {metrics['similarity']}, Precision: {metrics['precision']:.2%}, Recall: {metrics['recall']:.2%}")
             else:
-                st.info("No data to compare.")
-
+                    st.info("No matching LLM annotation found for this call ID.")
         else:
             st.info("📝 No annotations available for comparison.")
-
-
-    # with tabs[2]:
-    #     st.markdown('<h3 class="section-header">LLM Evaluation Comparison</h3>', unsafe_allow_html=True)
-        
-    #     if st.session_state.annotations:
-    #         # Create three columns for comparison
-    #         col_human, col_llm, col_metrics = st.columns(3)
-            
-    #         with col_human:
-    #             st.markdown('<h4 class="subsection-header">Human Annotation</h4>', unsafe_allow_html=True)
-    #             human_annotation = st.session_state.annotations[-1]  # Get latest annotation
-                
-    #             # Display human annotations in an organized way
-    #             for section, data in human_annotation.items():
-    #                 with st.expander(f"📋 {section}", expanded=True):
-    #                     if isinstance(data, dict):
-    #                         for key, value in data.items():
-    #                             st.write(f"**{key}:** {value}")
-    #                     else:
-    #                         st.write(f"**{section}:** {data}")
-            
-    #         with col_llm:
-    #             st.markdown('<h4 class="subsection-header">LLM Generated Annotation</h4>', unsafe_allow_html=True)
-    #             llm_annotation = load_dummy_llm_data()
-                
-    #             # Display LLM annotations
-    #             for section, data in llm_annotation.items():
-    #                 with st.expander(f"🤖 {section}", expanded=True):
-    #                     if isinstance(data, dict):
-    #                         for key, value in data.items():
-    #                             st.write(f"**{key}:** {value}")
-    #                     else:
-    #                         st.write(f"**{section}:** {data}")
-            
-    #         with col_metrics:
-    #             st.markdown('<h4 class="subsection-header">Comparison Metrics</h4>', unsafe_allow_html=True)
-                
-    #             # Calculate and display metrics for each section
-    #             overall_metrics = {"precision": [], "recall": []}
-
-    #             for section, human_data in human_annotation.items():
-    #                 with st.expander(f"📊 {section} Metrics", expanded=True):
-    #                     if isinstance(human_data, dict):
-    #                         for key, human_value in human_data.items():
-    #                             llm_value = llm_annotation.get(section, {}).get(key)
-    #                             metrics = calculate_metrics(human_value, llm_value)
-                                
-    #                             st.write(f"**{key}** {metrics['match']} ({metrics['similarity']})")
-    #                             col1, col2 = st.columns(2)
-    #                             with col1:
-    #                                 st.metric("Precision", f"{metrics['precision']:.2%}")
-    #                             with col2:
-    #                                 st.metric("Recall", f"{metrics['recall']:.2%}")
-                                
-    #                             overall_metrics["precision"].append(metrics["precision"])
-    #                             overall_metrics["recall"].append(metrics["recall"])
-                
-    #             # Display overall metrics
-    #             st.markdown("### Overall Performance")
-    #             avg_precision = sum(overall_metrics["precision"]) / len(overall_metrics["precision"])
-    #             avg_recall = sum(overall_metrics["recall"]) / len(overall_metrics["recall"])
-                
-    #             col1, col2 = st.columns(2)
-    #             with col1:
-    #                 st.metric("Average Precision", f"{avg_precision:.2%}")
-    #             with col2:
-    #                 st.metric("Average Recall", f"{avg_recall:.2%}")
-    #     else:
-    #         st.info("📝 No annotations available for comparison.")
 
 
 if __name__ == "__main__":
