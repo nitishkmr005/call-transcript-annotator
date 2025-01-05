@@ -1,0 +1,29 @@
+{
+    "Key 1": "Value 1",
+    "Key 2": [
+        10,
+        30
+    ],
+    "Key 3": [
+        {
+            "SubKey1": "Text A"
+        },
+        {
+            "SubKey2": "Text Z"
+        }
+    ],
+    "Key 4": "Another Val",
+    "Key 5": [
+        "Item1",
+        "ItemX",
+        "ItemY"
+    ],
+    "Key 6": [
+        {
+            "SubKey1": "This is a code with testing logic"
+        },
+        {
+            "SubKey2": "Text Y"
+        }
+    ]
+}

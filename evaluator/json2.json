@@ -1,0 +1,27 @@
+{
+    "Key 1": "Value 1",
+    "Key 2": [
+        10,
+        20
+    ],
+    "Key 3": [
+        {
+            "SubKey1": "This is a test"
+        },
+        {
+            "SubKey2": "Text A"
+        }
+    ],
+    "Key 5": [
+        "Item1",
+        "Item2"
+    ],
+    "Key 6": [
+        {
+            "SubKey1": "This is a testing code"
+        },
+        {
+            "SubKey2": "Text D"
+        }
+    ]
+}
