@@ -366,10 +366,9 @@ def main():
     st.title("📞 Call Transcript Annotation Tool")
     add_custom_css()
 
-    # Create tabs with only two options
-    tabs = st.tabs(["📝 Transcript & Annotation", "📊 View Annotations"])
-    
-    with tabs[0]:
+    # Create a sidebar for filters
+    with st.sidebar:
+        st.markdown('<div class="subheader">Filter Conversations</div>', unsafe_allow_html=True)
         # Sample Data
         data = [
             {
@@ -379,8 +378,8 @@ def main():
                 "llm_output": json.dumps({
                     "call_details": {
                         "call_id": "12345",
-                        "call_date": "2024-12-13",
-                        "call_type": "Initial Consultation",
+                        "call_timestamp":{"call_date": "2024-12-13"},
+                        "call_type": "Initial Consultation"
                     },
                     "client_profile": {
                         "client_age": 18,
@@ -401,8 +400,8 @@ def main():
                 "llm_output": json.dumps({
                     "call_details": {
                         "call_id": "12346",
-                        "call_date": "2024-12-14",
-                        "call_type": "Plan Upgrade",
+                        "call_timestamp":{"call_date": "2024-12-14"},
+                        "call_type": "Plan Upgrade"
                     },
                     "client_profile": {
                         "client_age": 35,
@@ -420,9 +419,7 @@ def main():
 
         df = pd.DataFrame(data)
 
-        # ---------------------
-        # STEP 1: FILTERS
-        # ---------------------
+        # Move filters to sidebar
         annotators = sorted(df['annotator'].unique())
         selected_annotator = st.selectbox("Select Annotator", annotators)
 
@@ -431,6 +428,10 @@ def main():
         interaction_ids = sorted(filtered_df['interaction_id'].unique())
         selected_interaction_id = st.selectbox("Select Interaction ID", interaction_ids)
 
+    # Create tabs with only two options
+    tabs = st.tabs(["📝 Transcript & Annotation", "📊 View Annotations"])
+    
+    with tabs[0]:
         # Retrieve the row based on selected annotator & interaction ID
         row_df = filtered_df[
             (filtered_df['annotator'] == selected_annotator) &
@@ -470,7 +471,7 @@ def main():
                         with tab:
                             st.markdown(f'<div class="section-header">{section.replace("_", " ").title()}</div>', 
                                       unsafe_allow_html=True)
-                            updated_sections[section] = render_field(section, llm_output_data.get(section, {}))
+                            updated_sections[section] = render_field(section, llm_output_data.get(section, {}), is_subsection=True)
 
                     submitted = st.form_submit_button("Submit Annotation")
                     
@@ -500,7 +501,7 @@ def main():
         else:
             st.info("No annotations found.")
 
-def render_field(key, value, parent_key=""):
+def render_field(key, value, parent_key="", is_subsection=False):
     """Enhanced render_field function with validation controls"""
     field_id = f"{parent_key}_{key}".strip('_')
     
@@ -534,19 +535,29 @@ def render_field(key, value, parent_key=""):
             }
     
     elif isinstance(value, dict):
-        # st.markdown(f'<div class="section-header">{key.capitalize()}</div>', unsafe_allow_html=True)
+        if is_subsection:
+            col1, col2 = st.columns([3, 1])
+            with col2:
+                st.markdown('<div style="text-align: left; color: #64B5F6; font-size: 0.8em; margin-bottom: 5px;">Evaluation</div>', 
+                          unsafe_allow_html=True)
+        
         updated_dict = {}
         for sub_key, sub_value in value.items():
             with st.container():
-                updated_dict[sub_key] = render_field(sub_key, sub_value, f"{parent_key}_{key}")
+                updated_dict[sub_key] = render_field(sub_key, sub_value, f"{parent_key}_{key}", False)
         return updated_dict
     
     elif isinstance(value, list):
-        # st.markdown(f'<div class="section-header">{key.capitalize()}</div>', unsafe_allow_html=True)
+        if is_subsection:
+            col1, col2 = st.columns([3, 1])
+            with col2:
+                st.markdown('<div style="text-align: left; color: #64B5F6; font-size: 0.8em; margin-bottom: 5px;">Evaluation</div>', 
+                          unsafe_allow_html=True)
+        
         updated_list = []
         for i, item in enumerate(value):
             with st.container():
-                updated_list.append(render_field(f"{key}_{i}", item, parent_key))
+                updated_list.append(render_field(f"{key}_{i}", item, parent_key, False))
         return updated_list
     
     else:
