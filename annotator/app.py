@@ -305,14 +305,12 @@ def render_conversation(conversation):
     for message in messages:
         if message.startswith("Agent:"):
             st.markdown(
-                f'<div class="timestamp">10:01</div>' +  # Add actual timestamp logic here
-                f'<div class="agent-bubble"><strong>Agent (10:01):</strong> {message.split(":", 1)[1].strip()}</div>',
+                f'<div class="agent-bubble"><strong>Agent:</strong> {message.split(":", 1)[1].strip()}</div>',
                 unsafe_allow_html=True
             )
         elif message.startswith("Customer:"):
             st.markdown(
-                f'<div class="timestamp" style="text-align: right;">10:02</div>' +  # Add actual timestamp logic here
-                f'<div class="customer-bubble"><strong>Customer (10:02):</strong> {message.split(":", 1)[1].strip()}</div>',
+                f'<div class="customer-bubble"><strong>Customer:</strong> {message.split(":", 1)[1].strip()}</div>',
                 unsafe_allow_html=True
             )
     st.markdown('</div>', unsafe_allow_html=True)
@@ -456,27 +454,34 @@ def main():
                 except json.JSONDecodeError:
                     llm_output_data = {}
 
-                updated_output = {}
-                
-                # Render fields in a cleaner layout
-                for key, value in llm_output_data.items():
-                    with st.container():
-                        updated_output[key] = render_field(key, value)
+                # Dynamically create tabs based on the subsections in llm_output_data
+                subsections = list(llm_output_data.keys())
+                if not subsections:
+                    st.warning("No annotation sections found in the data")
+                else:
+                    # Create tabs dynamically
+                    annotation_tabs = st.tabs([section.replace('_', ' ').title() for section in subsections])
+                    
+                    # Dictionary to store updates for each section
+                    updated_sections = {}
+                    
+                    # Render each section in its corresponding tab
+                    for tab, section in zip(annotation_tabs, subsections):
+                        with tab:
+                            st.markdown(f'<div class="section-header">{section.replace("_", " ").title()}</div>', 
+                                      unsafe_allow_html=True)
+                            updated_sections[section] = render_field(section, llm_output_data.get(section, {}))
 
-                submitted = st.form_submit_button("Submit Annotation")
-                
-                if submitted:
-                    row_index = row_df.name
-                    validation_output = {
-                        "data": llm_output_data,
-                        "validation": updated_output
-                    }
+                    submitted = st.form_submit_button("Submit Annotation")
                     
-                    df.at[row_index, 'llm_output'] = json.dumps(validation_output, indent=2)
-                    
-                    # Save to JSON instead of Parquet
-                    save_annotations(df)
-                    st.success("Annotations saved successfully!")
+                    if submitted:
+                        row_index = row_df.name
+                        # Use the dynamically created sections for validation output
+                        df.at[row_index, 'llm_output'] = json.dumps(updated_sections, indent=2)
+                        
+                        # Save to JSON
+                        save_annotations(df)
+                        st.success("Annotations saved successfully!")
             st.markdown('</div>', unsafe_allow_html=True)
 
     with tabs[1]:
@@ -529,7 +534,7 @@ def render_field(key, value, parent_key=""):
             }
     
     elif isinstance(value, dict):
-        st.markdown(f'<div class="section-header">{key.capitalize()}</div>', unsafe_allow_html=True)
+        # st.markdown(f'<div class="section-header">{key.capitalize()}</div>', unsafe_allow_html=True)
         updated_dict = {}
         for sub_key, sub_value in value.items():
             with st.container():
@@ -537,7 +542,7 @@ def render_field(key, value, parent_key=""):
         return updated_dict
     
     elif isinstance(value, list):
-        st.markdown(f'<div class="section-header">{key.capitalize()}</div>', unsafe_allow_html=True)
+        # st.markdown(f'<div class="section-header">{key.capitalize()}</div>', unsafe_allow_html=True)
         updated_list = []
         for i, item in enumerate(value):
             with st.container():
