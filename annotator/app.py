@@ -544,7 +544,7 @@ def render_field(key, value, parent_key="", is_subsection=False):
         if is_subsection:
             col1, col2, col3 = st.columns([3, 1, 1])
             with col2:
-                st.markdown('<div style="text-align: left; color: #64B5F6; font-size: 0.8em; margin-bottom: 5px;">Evaluation</div>', 
+                st.markdown('<div style="text-align: left; color: #64B5F6; font-size: 0.8em; margin-bottom: 5px;">Correct</div>', 
                           unsafe_allow_html=True)
             with col3:
                 st.markdown('<div style="text-align: left; color: #64B5F6; font-size: 0.8em; margin-bottom: 5px;">Missing</div>', 
@@ -560,7 +560,7 @@ def render_field(key, value, parent_key="", is_subsection=False):
         if is_subsection:
             col1, col2, col3 = st.columns([3, 1, 1])
             with col2:
-                st.markdown('<div style="text-align: left; color: #64B5F6; font-size: 0.8em; margin-bottom: 5px;">Evaluation</div>', 
+                st.markdown('<div style="text-align: left; color: #64B5F6; font-size: 0.8em; margin-bottom: 5px;">Correct</div>', 
                           unsafe_allow_html=True)
             with col3:
                 st.markdown('<div style="text-align: left; color: #64B5F6; font-size: 0.8em; margin-bottom: 5px;">Missing</div>', 
