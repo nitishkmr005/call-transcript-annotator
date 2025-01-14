@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import json
+import numpy as np
 
 # Set page configuration for wide layout
 st.set_page_config(layout="wide", page_title="Call Transcript Annotation Tool")
@@ -384,13 +385,9 @@ def main():
                     "client_profile": {
                         "client_age": 18,
                         "current_401k_balance": 0.0,
-                        "years_to_retirement": 0
+                        "years_to_retirement": np.nan
                     },
-                    "retirement_goals": [
-                        "retire early",
-                        "retire in 10 years",
-                        "retire in 20 years"
-                    ]
+                    "retirement_goals": []
                 })
             },
             {
@@ -507,7 +504,7 @@ def render_field(key, value, parent_key="", is_subsection=False):
     
     if isinstance(value, (str, int, float)):
         with st.container():
-            col1, col2 = st.columns([3, 1])
+            col1, col2, col3 = st.columns([3, 1, 1])
             with col1:
                 input_value = st.text_input(f"{key.capitalize()}", value, key=f"input_{field_id}")
             with col2:
@@ -518,9 +515,17 @@ def render_field(key, value, parent_key="", is_subsection=False):
                     key=f"radio_{field_id}",
                     label_visibility="collapsed"
                 )
+            with col3:
+                is_missing = st.radio(
+                    "Missing?",
+                    ["No", "Yes"],
+                    horizontal=True,
+                    key=f"missing_{field_id}",
+                    label_visibility="collapsed"
+                )
             
             remark = ""
-            if is_correct == "No":
+            if is_correct == "No" or is_missing == "Yes":
                 remark = st.text_area(
                     "Remark",
                     key=f"remark_{field_id}",
@@ -531,14 +536,18 @@ def render_field(key, value, parent_key="", is_subsection=False):
             return {
                 "value": input_value,
                 "is_correct": is_correct == "Yes",
+                "is_missing": is_missing == "Yes",
                 "remark": remark
             }
     
     elif isinstance(value, dict):
         if is_subsection:
-            col1, col2 = st.columns([3, 1])
+            col1, col2, col3 = st.columns([3, 1, 1])
             with col2:
                 st.markdown('<div style="text-align: left; color: #64B5F6; font-size: 0.8em; margin-bottom: 5px;">Evaluation</div>', 
+                          unsafe_allow_html=True)
+            with col3:
+                st.markdown('<div style="text-align: left; color: #64B5F6; font-size: 0.8em; margin-bottom: 5px;">Missing</div>', 
                           unsafe_allow_html=True)
         
         updated_dict = {}
@@ -549,9 +558,12 @@ def render_field(key, value, parent_key="", is_subsection=False):
     
     elif isinstance(value, list):
         if is_subsection:
-            col1, col2 = st.columns([3, 1])
+            col1, col2, col3 = st.columns([3, 1, 1])
             with col2:
                 st.markdown('<div style="text-align: left; color: #64B5F6; font-size: 0.8em; margin-bottom: 5px;">Evaluation</div>', 
+                          unsafe_allow_html=True)
+            with col3:
+                st.markdown('<div style="text-align: left; color: #64B5F6; font-size: 0.8em; margin-bottom: 5px;">Missing</div>', 
                           unsafe_allow_html=True)
         
         updated_list = []
