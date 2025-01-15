@@ -316,56 +316,156 @@ def render_conversation(conversation):
             )
     st.markdown('</div>', unsafe_allow_html=True)
 
-def save_annotations(df, output_file="annotations.json"):
-    """Save annotations to JSON file"""
-    annotations = []
+def save_annotations(df, output_file="annotations.parquet"):
+    """Save annotations to parquet file with overwrite capability"""
+    # try:
+        # Try to load existing annotations
+    try:
+        existing_df = pd.read_parquet(output_file)
+        if 'last_updated' not in existing_df.columns:
+            existing_df['last_updated'] = pd.Timestamp.now()
+    except FileNotFoundError:
+        existing_df = pd.DataFrame(columns=[
+            'interaction_id', 
+            'annotator', 
+            'llm_output',
+            'annotated_output',
+            'last_updated'
+        ])
+    
+    # Create new annotations DataFrame
+    new_annotations = []
+    current_time = pd.Timestamp.now()
+    
+    # Debug print
+    print("DataFrame columns:", df.columns)
+    
     for _, row in df.iterrows():
         try:
-            annotation_data = {
-                "interaction_id": row["interaction_id"],
-                "annotator": row["annotator"],
-                "validation_data": json.loads(row["llm_output"])
-            }
-            annotations.append(annotation_data)
-        except:
+            new_annotations.append({
+                'interaction_id': row['interaction_id'],
+                'annotator': row['annotator'],
+                'llm_output': row['llm_output'],
+                'annotated_output': row['annotated_output'] if 'annotated_output' in row else row['llm_output'],
+                'last_updated': current_time
+            })
+        except Exception as e:
+            st.error(f"Error processing row: {str(e)}")
             continue
     
-    with open(output_file, 'w') as f:
-        json.dump(annotations, f, indent=2)
+    if not new_annotations:
+        st.error("No valid annotations to save")
+        return False
+        
+    new_df = pd.DataFrame(new_annotations)
+    
+    # Remove existing entries for the same interaction_ids
+    if not existing_df.empty:
+        existing_df = existing_df[~existing_df['interaction_id'].isin(new_df['interaction_id'])]
+    
+    # Concatenate existing and new annotations
+    final_df = pd.concat([existing_df, new_df], ignore_index=True)
+    
+    # Save to parquet
+    final_df.to_parquet(output_file, index=False)
+    return True
+    # except Exception as e:
+    #     st.error(f"Error saving annotations file: {str(e)}")
+    #     return False
 
-def load_annotations(file_path="annotations.json"):
-    """Load annotations from JSON file"""
+def load_annotations(file_path="annotations.parquet"):
+    """Load annotations from parquet file"""
     try:
-        with open(file_path, 'r') as f:
-            return json.load(f)
+        df = pd.read_parquet(file_path)
+        required_columns = ['interaction_id', 'annotator', 'llm_output', 'annotated_output']
+        
+        # Check if all required columns exist
+        if not all(col in df.columns for col in required_columns):
+            return pd.DataFrame(columns=required_columns + ['last_updated'])
+            
+        # Add last_updated column if it doesn't exist
+        if 'last_updated' not in df.columns:
+            df['last_updated'] = pd.Timestamp.now()
+        
+        # Sort by last_updated to show most recent annotations first
+        return df.sort_values('last_updated', ascending=False)
     except FileNotFoundError:
-        return []
+        return pd.DataFrame(columns=[
+            'interaction_id', 
+            'annotator', 
+            'llm_output',
+            'annotated_output',
+            'last_updated'
+        ])
 
-def format_validation_data(validation_data):
-    """Format validation data for DataFrame display"""
-    if not isinstance(validation_data, dict) or 'validation' not in validation_data:
-        return {}
-    
-    flat_data = {}
-    
-    def flatten_dict(d, prefix=''):
-        for key, value in d.items():
-            if isinstance(value, dict):
-                if 'is_correct' in value:
-                    flat_data[f"{prefix}{key}_value"] = value['value']
-                    flat_data[f"{prefix}{key}_status"] = '✅' if value['is_correct'] else '❌'
-                    if not value['is_correct'] and value['remark']:
-                        flat_data[f"{prefix}{key}_remark"] = value['remark']
-                else:
-                    flatten_dict(value, f"{prefix}{key}_")
-    
-    flatten_dict(validation_data['validation'])
-    return flat_data
+def show_flash_message(message, type="success"):
+    """Show a flash message that automatically disappears"""
+    styles = {
+        "success": """
+            <div style="
+                position: fixed;
+                top: 50px;
+                left: 50%;
+                transform: translateX(-50%);
+                padding: 15px 30px;
+                background-color: rgba(0, 255, 0, 0.1);
+                border: 1px solid #00ff00;
+                border-radius: 5px;
+                color: #00ff00;
+                font-size: 16px;
+                z-index: 1000;
+                animation: fadeOut 3s forwards;
+            ">
+                ✅ """ + message + """
+            </div>
+            <style>
+                @keyframes fadeOut {
+                    0% { opacity: 1; }
+                    70% { opacity: 1; }
+                    100% { opacity: 0; }
+                }
+            </style>
+        """,
+        "error": """
+            <div style="
+                position: fixed;
+                top: 50px;
+                left: 50%;
+                transform: translateX(-50%);
+                padding: 15px 30px;
+                background-color: rgba(255, 0, 0, 0.1);
+                border: 1px solid #ff0000;
+                border-radius: 5px;
+                color: #ff0000;
+                font-size: 16px;
+                z-index: 1000;
+                animation: fadeOut 3s forwards;
+            ">
+                ❌ """ + message + """
+            </div>
+            <style>
+                @keyframes fadeOut {
+                    0% { opacity: 1; }
+                    70% { opacity: 1; }
+                    100% { opacity: 0; }
+                }
+            </style>
+        """
+    }
+    st.markdown(styles[type], unsafe_allow_html=True)
 
 # Main app logic
 def main():
     st.title("📞 Call Transcript Annotation Tool")
     add_custom_css()
+
+    if st.session_state.get("show_flash", False):
+        show_flash_message(
+            st.session_state["flash_message"], 
+            st.session_state["flash_type"]
+        )
+        # Clear the flash message
+        st.session_state["show_flash"] = False
 
     # Create a sidebar for filters
     with st.sidebar:
@@ -378,7 +478,7 @@ def main():
                 "conversations": "Agent: Hello! Thank you for calling. How may I help you today?\nCustomer: Hi, I'm having issues with my account login.\nAgent: I understand. Can you please provide your account number?\nCustomer: Yes, it's 12345678.",
                 "llm_output": json.dumps({
                     "call_details": {
-                        "call_id": "12345",
+                        "call_id": "12345Hello! Thank you for calling. How may I help you todaHello! Thank you for calling. How may I help you todaHello! Thank you for calling. How may I help you todaHello! Thank you for calling. How may I help you toda",
                         "call_timestamp":{"call_date": "2024-12-13"},
                         "call_type": "Initial Consultation"
                     },
@@ -386,8 +486,8 @@ def main():
                         "client_age": 18,
                         "current_401k_balance": 0.0,
                         "years_to_retirement": np.nan
-                    },
-                    "retirement_goals": []
+                        },
+                    "retirement": [{"retirement_goal_flag": True},{"retirement_goals": ["travel after retirement"]},{"retirement_age": 65}]
                 })
             },
             {
@@ -470,33 +570,88 @@ def main():
                                       unsafe_allow_html=True)
                             updated_sections[section] = render_field(section, llm_output_data.get(section, {}), is_subsection=True)
 
-                    submitted = st.form_submit_button("Submit Annotation")
+                    submitted = st.form_submit_button("Submit")
                     
                     if submitted:
+                        # try:
+                            # Process form submission
                         row_index = row_df.name
-                        # Use the dynamically created sections for validation output
-                        df.at[row_index, 'llm_output'] = json.dumps(updated_sections, indent=2)
                         
-                        # Save to JSON
-                        save_annotations(df)
-                        st.success("Annotations saved successfully!")
+                        # Create a copy of the row data
+                        row_data = row_df.copy()
+                        
+                        # Add or update the annotated_output
+                        row_data['annotated_output'] = json.dumps(updated_sections, indent=2)
+                        
+                        # Create a new DataFrame with just this row
+                        submission_df = pd.DataFrame([row_data])
+                        save_annotations(submission_df)
+                            # Save annotations
+                            # if save_annotations(submission_df):
+                            #     st.session_state["show_flash"] = True
+                            #     st.session_state["flash_message"] = "Annotations saved successfully!"
+                            #     st.session_state["flash_type"] = "success"
+                            # else:
+                            #     st.session_state["show_flash"] = True
+                            #     st.session_state["flash_message"] = "Failed to save annotations"
+                            #     st.session_state["flash_type"] = "error"
+                            
+                            # st.rerun()
+                        # except Exception as e:
+                        #     st.session_state["show_flash"] = True
+                        #     st.session_state["flash_message"] = f"Error submitting annotation: {str(e)}"
+                        #     st.session_state["flash_type"] = "error"
+                        #     st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
 
     with tabs[1]:
-        st.subheader("View All Annotations")
+        st.subheader("View Submitted Annotations")
         
         # Load annotations
-        annotations = load_annotations()
-        if annotations:
-            interaction_ids = [annotation["interaction_id"] for annotation in annotations]
-            selected_interaction_id = st.selectbox("Select Interaction ID", interaction_ids)
+        annotations_df = load_annotations()
+        
+        if not annotations_df.empty and 'llm_output' in annotations_df.columns and 'annotated_output' in annotations_df.columns:
+            # Filter out rows where annotated_output is same as llm_output (not yet annotated)
+            annotations_df = annotations_df[annotations_df['llm_output'] != annotations_df['annotated_output']]
             
-            # Display the selected annotation as JSON
-            selected_annotation = next((annotation for annotation in annotations if annotation["interaction_id"] == selected_interaction_id), None)
-            if selected_annotation:
-                st.json(selected_annotation)
+            if not annotations_df.empty:
+                # Add filters
+                col1, col2 = st.columns(2)
+                with col1:
+                    selected_annotator = st.selectbox(
+                        "Filter by Annotator",
+                        options=['All'] + sorted(annotations_df['annotator'].unique().tolist())
+                    )
+                with col2:
+                    selected_interaction = st.selectbox(
+                        "Filter by Interaction ID",
+                        options=['All'] + sorted(annotations_df['interaction_id'].unique().tolist())
+                    )
+                
+                # Apply filters
+                filtered_df = annotations_df.copy()
+                if selected_annotator != 'All':
+                    filtered_df = filtered_df[filtered_df['annotator'] == selected_annotator]
+                if selected_interaction != 'All':
+                    filtered_df = filtered_df[filtered_df['interaction_id'] == selected_interaction]
+                
+                # Display annotations
+                if not filtered_df.empty:
+                    for _, row in filtered_df.iterrows():
+                        with st.expander(f"Interaction: {row['interaction_id']} - Annotator: {row['annotator']} - Last Updated: {row['last_updated'].strftime('%Y-%m-%d %H:%M:%S')}"):
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                st.markdown("#### Original LLM Output")
+                                st.json(json.loads(row['llm_output']))
+                            with col2:
+                                st.markdown("#### Annotated Output")
+                                st.json(json.loads(row['annotated_output']))
+                else:
+                    st.info("No annotations found with selected filters.")
+            else:
+                st.info("No submitted annotations found.")
         else:
-            st.info("No annotations found.")
+            st.info("No annotations available yet.")
 
 def render_field(key, value, parent_key="", is_subsection=False):
     """Enhanced render_field function with validation controls"""
@@ -504,28 +659,27 @@ def render_field(key, value, parent_key="", is_subsection=False):
     
     if isinstance(value, (str, int, float)):
         with st.container():
-            col1, col2, col3 = st.columns([3, 1, 1])
+            # Adjusted column widths: main content takes more space, checkboxes take less
+            col1, col2, col3 = st.columns([3, 0.5, 0.5])
             with col1:
-                input_value = st.text_input(f"{key.capitalize()}", value, key=f"input_{field_id}")
+                input_value = st.text_area(f"{key.capitalize()}", value, key=f"input_{field_id}")
             with col2:
-                is_correct = st.radio(
-                    "Correct?",
-                    ["Yes", "No"],
-                    horizontal=True,
-                    key=f"radio_{field_id}",
-                    label_visibility="collapsed"
+                is_incorrect = st.checkbox(
+                    "❌",
+                    key=f"incorrect_{field_id}",
+                    label_visibility="collapsed",
+                    help="Click to mark as incorrect"
                 )
             with col3:
-                is_missing = st.radio(
-                    "Missing?",
-                    ["No", "Yes"],
-                    horizontal=True,
+                is_missing = st.checkbox(
+                    "⚠️",
                     key=f"missing_{field_id}",
-                    label_visibility="collapsed"
+                    label_visibility="collapsed",
+                    help="Click to mark as missing"
                 )
             
             remark = ""
-            if is_correct == "No" or is_missing == "Yes":
+            if is_incorrect or is_missing:
                 remark = st.text_area(
                     "Remark",
                     key=f"remark_{field_id}",
@@ -535,16 +689,17 @@ def render_field(key, value, parent_key="", is_subsection=False):
             
             return {
                 "value": input_value,
-                "is_correct": is_correct == "Yes",
-                "is_missing": is_missing == "Yes",
+                "is_correct": not is_incorrect,
+                "is_missing": is_missing,
                 "remark": remark
             }
     
     elif isinstance(value, dict):
         if is_subsection:
-            col1, col2, col3 = st.columns([3, 1, 1])
+            # Adjusted header column widths to match
+            col1, col2, col3 = st.columns([3, 0.5, 0.5])
             with col2:
-                st.markdown('<div style="text-align: left; color: #64B5F6; font-size: 0.8em; margin-bottom: 5px;">Correct</div>', 
+                st.markdown('<div style="text-align: left; color: #64B5F6; font-size: 0.8em; margin-bottom: 5px;">Incorrect</div>', 
                           unsafe_allow_html=True)
             with col3:
                 st.markdown('<div style="text-align: left; color: #64B5F6; font-size: 0.8em; margin-bottom: 5px;">Missing</div>', 
@@ -558,9 +713,10 @@ def render_field(key, value, parent_key="", is_subsection=False):
     
     elif isinstance(value, list):
         if is_subsection:
-            col1, col2, col3 = st.columns([3, 1, 1])
+            # Adjusted header column widths to match
+            col1, col2, col3 = st.columns([3, 0.5, 0.5])
             with col2:
-                st.markdown('<div style="text-align: left; color: #64B5F6; font-size: 0.8em; margin-bottom: 5px;">Correct</div>', 
+                st.markdown('<div style="text-align: left; color: #64B5F6; font-size: 0.8em; margin-bottom: 5px;">Incorrect</div>', 
                           unsafe_allow_html=True)
             with col3:
                 st.markdown('<div style="text-align: left; color: #64B5F6; font-size: 0.8em; margin-bottom: 5px;">Missing</div>', 
