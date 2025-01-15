@@ -712,11 +712,21 @@ def render_field(key, value, parent_key="", is_subsection=False):
                 with st.container():
                     col1, col2, col3 = st.columns([3, 0.5, 0.5])
                     with col1:
+                        # Store the input value in session state
+                        if f"input_{field_id}_{i}" not in st.session_state:
+                            st.session_state[f"input_{field_id}_{i}"] = item
+                        
                         input_value = st.text_area(
                             f"Item {i + 1}", 
-                            item,
-                            key=f"input_{field_id}_{i}"
+                            value=st.session_state[f"input_{field_id}_{i}"],
+                            key=f"text_{field_id}_{i}",
+                            on_change=lambda i=i, v=st.session_state[f"text_{field_id}_{i}"]: 
+                                setattr(st.session_state, f"input_{field_id}_{i}", v)
                         )
+                        
+                        # Update session state with new value
+                        st.session_state[f"input_{field_id}_{i}"] = input_value
+                    
                     with col2:
                         is_incorrect = st.checkbox(
                             "❌",
@@ -742,7 +752,7 @@ def render_field(key, value, parent_key="", is_subsection=False):
                         )
                     
                     updated_list.append({
-                        "value": input_value,
+                        "value": st.session_state[f"input_{field_id}_{i}"],  # Use session state value
                         "is_correct": not is_incorrect,
                         "is_missing": is_missing,
                         "remark": remark
@@ -772,6 +782,12 @@ def render_field(key, value, parent_key="", is_subsection=False):
             
             # Process changes when form is submitted
             if st.session_state.get("form_submitted", False):
+                # Update list items with current text area values
+                st.session_state[f"list_items_{field_id}"] = [
+                    st.session_state[f"input_{field_id}_{i}"]
+                    for i in range(len(st.session_state[f"list_items_{field_id}"]))
+                ]
+                
                 # Add new item if exists
                 if st.session_state[f"new_item_{field_id}"]:
                     st.session_state[f"list_items_{field_id}"].append(
