@@ -304,14 +304,14 @@ def add_custom_css():
 def render_conversation(conversation):
     messages = conversation.split("\n")
     for message in messages:
-        if message.startswith("Agent:"):
+        if message.startswith("AGENT:"):
             st.markdown(
-                f'<div class="agent-bubble"><strong>Agent:</strong> {message.split(":", 1)[1].strip()}</div>',
+                f'<div class="agent-bubble"><strong>AGENT:</strong> {message.split(":", 1)[1].strip()}</div>',
                 unsafe_allow_html=True
             )
-        elif message.startswith("Customer:"):
+        elif message.startswith("CUSTOMER:"):
             st.markdown(
-                f'<div class="customer-bubble"><strong>Customer:</strong> {message.split(":", 1)[1].strip()}</div>',
+                f'<div class="customer-bubble"><strong>CUSTOMER:</strong> {message.split(":", 1)[1].strip()}</div>',
                 unsafe_allow_html=True
             )
     st.markdown('</div>', unsafe_allow_html=True)
@@ -475,7 +475,7 @@ def main():
             {
                 "interaction_id": "INT001",
                 "annotator": "Alice",
-                "conversations": "Agent: Hello! Thank you for calling. How may I help you today?\nCustomer: Hi, I'm having issues with my account login.\nAgent: I understand. Can you please provide your account number?\nCustomer: Yes, it's 12345678.",
+                "conversations": "AGENT: Hello! Thank you for calling. How may I help you today?\nCUSTOMER: Hi, I'm having issues with my account login.\nAGENT: I understand. Can you please provide your account number?\nCUSTOMER: Yes, it's 12345678.",
                 "llm_output": json.dumps({
                     "call_details": {
                         "call_id": "12345Hello! Thank you for calling. How may I help you todaHello! Thank you for calling. How may I help you todaHello! Thank you for calling. How may I help you todaHello! Thank you for calling. How may I help you toda",
@@ -493,7 +493,7 @@ def main():
             {
                 "interaction_id": "INT002",
                 "annotator": "Bob",
-                "conversations": "Agent: Hello! How can I assist you today?\nCustomer: I'm interested in upgrading my plan.\nAgent: Sure, let me provide you with the available options.",
+                "conversations": "AGENT: Hello! How can I assist you today?\nCUSTOMER: I'm interested in upgrading my plan.\nAGENT: Sure, let me provide you with the available options.",
                 "llm_output": json.dumps({
                     "call_details": {
                         "call_id": "12346",
