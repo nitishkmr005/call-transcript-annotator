@@ -420,7 +420,7 @@ def main():
 
     # Always try to load from parquet file
     try:
-        df = pd.read_parquet("annotations.parquet")
+        df = pd.read_parquet("annotations1.parquet")
     except FileNotFoundError:
         # If file doesn't exist, initialize with sample data
         data = [
@@ -439,7 +439,8 @@ def main():
                         "current_401k_balance": 0.0,
                         "years_to_retirement": np.nan
                         },
-                    "retirement": [{"retirement_goal_flag": True},{"retirement_goals": ["travel after retirement"]},{"retirement_age": 65}]
+                    "retirement_test": [{"retirement_goal_flag": True},{"retirement_goals": ["travel after retirement"]},{"retirement_age": 65}],
+                    "retirement_goals": ["travel after retirement"]
                 })
             },
             {
@@ -538,24 +539,15 @@ def main():
                             updated_sections[section] = render_field(section, llm_output_data.get(section, {}), is_subsection=True)
 
                     submitted = st.form_submit_button("Submit")
-                    
                     if submitted:
+                        st.session_state["form_submitted"] = True
                         try:
                             row_index = row_df.name
-                            
-                            # Read the latest data from file
                             current_df = pd.read_parquet("annotations.parquet")
-                            
-                            # Update the specific row
                             current_df.at[row_index, 'annotated_output'] = json.dumps(updated_sections, indent=2)
                             current_df.at[row_index, 'last_updated'] = pd.Timestamp.now()
-                            
-                            # Save back to parquet
                             current_df.to_parquet("annotations.parquet", index=False)
-                            
-                            # Update session state
                             st.session_state.df = current_df
-                            
                             st.session_state["show_flash"] = True
                             st.session_state["flash_message"] = "Annotations saved successfully!"
                             st.session_state["flash_type"] = "success"
@@ -565,6 +557,8 @@ def main():
                             st.session_state["flash_message"] = f"Error saving annotation: {str(e)}"
                             st.session_state["flash_type"] = "error"
                             st.rerun()
+                    else:
+                        st.session_state["form_submitted"] = False
             st.markdown('</div>', unsafe_allow_html=True)
 
     with tabs[1]:
@@ -694,7 +688,6 @@ def render_field(key, value, parent_key="", is_subsection=False):
     
     elif isinstance(value, list):
         if is_subsection:
-            # Adjusted header column widths to match
             col1, col2, col3 = st.columns([3, 0.5, 0.5])
             with col2:
                 st.markdown('<div style="text-align: left; color: #64B5F6; font-size: 0.8em; margin-bottom: 5px;">Incorrect</div>', 
@@ -703,10 +696,89 @@ def render_field(key, value, parent_key="", is_subsection=False):
                 st.markdown('<div style="text-align: left; color: #64B5F6; font-size: 0.8em; margin-bottom: 5px;">Missing</div>', 
                           unsafe_allow_html=True)
         
-        updated_list = []
-        for i, item in enumerate(value):
-            with st.container():
-                updated_list.append(render_field(f"{key}_{i}", item, parent_key, False))
+        # Initialize session state for list items
+        if f"list_items_{field_id}" not in st.session_state:
+            st.session_state[f"list_items_{field_id}"] = value.copy()
+        if f"new_item_{field_id}" not in st.session_state:
+            st.session_state[f"new_item_{field_id}"] = ""
+        
+        # Show list summary
+        num_items = len(st.session_state[f"list_items_{field_id}"])
+        with st.expander(f"📋 {key.replace('_', ' ').title()} ({num_items} items)", expanded=False):
+            updated_list = []
+            
+            # Display existing items
+            for i, item in enumerate(st.session_state[f"list_items_{field_id}"]):
+                with st.container():
+                    col1, col2, col3 = st.columns([3, 0.5, 0.5])
+                    with col1:
+                        input_value = st.text_area(
+                            f"Item {i + 1}", 
+                            item,
+                            key=f"input_{field_id}_{i}"
+                        )
+                    with col2:
+                        is_incorrect = st.checkbox(
+                            "❌",
+                            key=f"incorrect_{field_id}_{i}",
+                            label_visibility="collapsed",
+                            help="Click to mark as incorrect"
+                        )
+                    with col3:
+                        is_missing = st.checkbox(
+                            "⚠️",
+                            key=f"missing_{field_id}_{i}",
+                            label_visibility="collapsed",
+                            help="Click to mark as missing"
+                        )
+                    
+                    remark = ""
+                    if is_incorrect or is_missing:
+                        remark = st.text_area(
+                            "Remark",
+                            key=f"remark_{field_id}_{i}",
+                            placeholder="Enter your remark here...",
+                            height=100
+                        )
+                    
+                    updated_list.append({
+                        "value": input_value,
+                        "is_correct": not is_incorrect,
+                        "is_missing": is_missing,
+                        "remark": remark
+                    })
+            
+            # Add new item section
+            st.markdown(
+                '''
+                <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid rgba(100, 181, 246, 0.2);">
+                    <div style="color: #64B5F6; font-size: 0.9em; margin-bottom: 10px;">Add New Item</div>
+                </div>
+                ''',
+                unsafe_allow_html=True
+            )
+            
+            # New item input
+            new_item = st.text_input(
+                "",
+                key=f"new_item_input_{field_id}",
+                placeholder="Enter new item...",
+                label_visibility="collapsed"
+            )
+            
+            # Store new item in session state
+            if new_item:
+                st.session_state[f"new_item_{field_id}"] = new_item
+            
+            # Process changes when form is submitted
+            if st.session_state.get("form_submitted", False):
+                # Add new item if exists
+                if st.session_state[f"new_item_{field_id}"]:
+                    st.session_state[f"list_items_{field_id}"].append(
+                        st.session_state[f"new_item_{field_id}"]
+                    )
+                    st.session_state[f"new_item_{field_id}"] = ""
+            
         return updated_list
     
     else:
