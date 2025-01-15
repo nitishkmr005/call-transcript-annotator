@@ -317,61 +317,20 @@ def render_conversation(conversation):
     st.markdown('</div>', unsafe_allow_html=True)
 
 def save_annotations(df, output_file="annotations.parquet"):
-    """Save annotations to parquet file with overwrite capability"""
-    # try:
-        # Try to load existing annotations
+    """Save annotations to parquet file"""
     try:
-        existing_df = pd.read_parquet(output_file)
-        if 'last_updated' not in existing_df.columns:
-            existing_df['last_updated'] = pd.Timestamp.now()
-    except FileNotFoundError:
-        existing_df = pd.DataFrame(columns=[
-            'interaction_id', 
-            'annotator', 
-            'llm_output',
-            'annotated_output',
-            'last_updated'
-        ])
-    
-    # Create new annotations DataFrame
-    new_annotations = []
-    current_time = pd.Timestamp.now()
-    
-    # Debug print
-    print("DataFrame columns:", df.columns)
-    
-    for _, row in df.iterrows():
-        try:
-            new_annotations.append({
-                'interaction_id': row['interaction_id'],
-                'annotator': row['annotator'],
-                'llm_output': row['llm_output'],
-                'annotated_output': row['annotated_output'] if 'annotated_output' in row else row['llm_output'],
-                'last_updated': current_time
-            })
-        except Exception as e:
-            st.error(f"Error processing row: {str(e)}")
-            continue
-    
-    if not new_annotations:
-        st.error("No valid annotations to save")
+        # Ensure last_updated is set
+        if 'last_updated' not in df.columns:
+            df['last_updated'] = pd.Timestamp.now()
+        elif df['last_updated'].isnull().any():
+            df.loc[df['last_updated'].isnull(), 'last_updated'] = pd.Timestamp.now()
+            
+        # Save to parquet
+        df.to_parquet(output_file, index=False)
+        return True
+    except Exception as e:
+        st.error(f"Error saving annotations file: {str(e)}")
         return False
-        
-    new_df = pd.DataFrame(new_annotations)
-    
-    # Remove existing entries for the same interaction_ids
-    if not existing_df.empty:
-        existing_df = existing_df[~existing_df['interaction_id'].isin(new_df['interaction_id'])]
-    
-    # Concatenate existing and new annotations
-    final_df = pd.concat([existing_df, new_df], ignore_index=True)
-    
-    # Save to parquet
-    final_df.to_parquet(output_file, index=False)
-    return True
-    # except Exception as e:
-    #     st.error(f"Error saving annotations file: {str(e)}")
-    #     return False
 
 def load_annotations(file_path="annotations.parquet"):
     """Load annotations from parquet file"""
@@ -459,18 +418,11 @@ def main():
     st.title("📞 Call Transcript Annotation Tool")
     add_custom_css()
 
-    if st.session_state.get("show_flash", False):
-        show_flash_message(
-            st.session_state["flash_message"], 
-            st.session_state["flash_type"]
-        )
-        # Clear the flash message
-        st.session_state["show_flash"] = False
-
-    # Create a sidebar for filters
-    with st.sidebar:
-        st.markdown('<div class="subheader">Filter Conversations</div>', unsafe_allow_html=True)
-        # Sample Data
+    # Always try to load from parquet file
+    try:
+        df = pd.read_parquet("annotations.parquet")
+    except FileNotFoundError:
+        # If file doesn't exist, initialize with sample data
         data = [
             {
                 "interaction_id": "INT001",
@@ -513,10 +465,25 @@ def main():
                 })
             }
         ]
-
         df = pd.DataFrame(data)
+        # Save initial data
+        df.to_parquet("annotations.parquet", index=False)
 
-        # Move filters to sidebar
+    # Store in session state only for form handling
+    st.session_state.df = df
+
+    if st.session_state.get("show_flash", False):
+        show_flash_message(
+            st.session_state["flash_message"], 
+            st.session_state["flash_type"]
+        )
+        # Clear the flash message
+        st.session_state["show_flash"] = False
+
+    # Move filters to sidebar
+    with st.sidebar:
+        st.markdown('<div class="subheader">Filter Conversations</div>', unsafe_allow_html=True)
+        
         annotators = sorted(df['annotator'].unique())
         selected_annotator = st.selectbox("Select Annotator", annotators)
 
@@ -573,35 +540,31 @@ def main():
                     submitted = st.form_submit_button("Submit")
                     
                     if submitted:
-                        # try:
-                            # Process form submission
-                        row_index = row_df.name
-                        
-                        # Create a copy of the row data
-                        row_data = row_df.copy()
-                        
-                        # Add or update the annotated_output
-                        row_data['annotated_output'] = json.dumps(updated_sections, indent=2)
-                        
-                        # Create a new DataFrame with just this row
-                        submission_df = pd.DataFrame([row_data])
-                        save_annotations(submission_df)
-                            # Save annotations
-                            # if save_annotations(submission_df):
-                            #     st.session_state["show_flash"] = True
-                            #     st.session_state["flash_message"] = "Annotations saved successfully!"
-                            #     st.session_state["flash_type"] = "success"
-                            # else:
-                            #     st.session_state["show_flash"] = True
-                            #     st.session_state["flash_message"] = "Failed to save annotations"
-                            #     st.session_state["flash_type"] = "error"
+                        try:
+                            row_index = row_df.name
                             
-                            # st.rerun()
-                        # except Exception as e:
-                        #     st.session_state["show_flash"] = True
-                        #     st.session_state["flash_message"] = f"Error submitting annotation: {str(e)}"
-                        #     st.session_state["flash_type"] = "error"
-                        #     st.rerun()
+                            # Read the latest data from file
+                            current_df = pd.read_parquet("annotations.parquet")
+                            
+                            # Update the specific row
+                            current_df.at[row_index, 'annotated_output'] = json.dumps(updated_sections, indent=2)
+                            current_df.at[row_index, 'last_updated'] = pd.Timestamp.now()
+                            
+                            # Save back to parquet
+                            current_df.to_parquet("annotations.parquet", index=False)
+                            
+                            # Update session state
+                            st.session_state.df = current_df
+                            
+                            st.session_state["show_flash"] = True
+                            st.session_state["flash_message"] = "Annotations saved successfully!"
+                            st.session_state["flash_type"] = "success"
+                            st.rerun()
+                        except Exception as e:
+                            st.session_state["show_flash"] = True
+                            st.session_state["flash_message"] = f"Error saving annotation: {str(e)}"
+                            st.session_state["flash_type"] = "error"
+                            st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
 
     with tabs[1]:
@@ -611,8 +574,11 @@ def main():
         annotations_df = load_annotations()
         
         if not annotations_df.empty and 'llm_output' in annotations_df.columns and 'annotated_output' in annotations_df.columns:
-            # Filter out rows where annotated_output is same as llm_output (not yet annotated)
-            annotations_df = annotations_df[annotations_df['llm_output'] != annotations_df['annotated_output']]
+            # Filter out rows where annotated_output is None or same as llm_output
+            annotations_df = annotations_df[
+                (annotations_df['annotated_output'].notna()) & 
+                (annotations_df['llm_output'] != annotations_df['annotated_output'])
+            ]
             
             if not annotations_df.empty:
                 # Add filters
@@ -638,14 +604,29 @@ def main():
                 # Display annotations
                 if not filtered_df.empty:
                     for _, row in filtered_df.iterrows():
-                        with st.expander(f"Interaction: {row['interaction_id']} - Annotator: {row['annotator']} - Last Updated: {row['last_updated'].strftime('%Y-%m-%d %H:%M:%S')}"):
+                        # Format the last_updated timestamp, handling None case
+                        last_updated_str = (
+                            row['last_updated'].strftime('%Y-%m-%d %H:%M:%S') 
+                            if pd.notnull(row['last_updated']) 
+                            else "Not updated yet"
+                        )
+                        
+                        with st.expander(
+                            f"Interaction: {row['interaction_id']} - "
+                            f"Annotator: {row['annotator']} - "
+                            f"Last Updated: {last_updated_str}"
+                        ):
                             col1, col2 = st.columns(2)
                             with col1:
                                 st.markdown("#### Original LLM Output")
                                 st.json(json.loads(row['llm_output']))
                             with col2:
                                 st.markdown("#### Annotated Output")
-                                st.json(json.loads(row['annotated_output']))
+                                # Handle None case for annotated_output
+                                if pd.notnull(row['annotated_output']):
+                                    st.json(json.loads(row['annotated_output']))
+                                else:
+                                    st.info("No annotations yet")
                 else:
                     st.info("No annotations found with selected filters.")
             else:
