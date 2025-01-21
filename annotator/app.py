@@ -2,6 +2,9 @@ import streamlit as st
 import pandas as pd
 import json
 import numpy as np
+from gtts import gTTS
+import base64
+import os
 
 # Set page configuration for wide layout
 st.set_page_config(layout="wide", page_title="Call Transcript Annotation Tool")
@@ -300,8 +303,132 @@ def add_custom_css():
         unsafe_allow_html=True
     )
 
-# Render the conversation with bubbles
+def text_to_speech(text):
+    """Convert text to speech and return the audio player HTML"""
+    try:
+        # Create gTTS object
+        tts = gTTS(text=text, lang='en', slow=False)
+        
+        # Create a temporary file to store the audio
+        audio_path = "temp_audio.mp3"
+        tts.save(audio_path)
+        
+        # Read the audio file and encode it to base64
+        with open(audio_path, "rb") as audio_file:
+            audio_bytes = audio_file.read()
+            audio_b64 = base64.b64encode(audio_bytes).decode()
+            
+        # Remove the temporary file
+        os.remove(audio_path)
+        
+        # Create audio player HTML with custom styling
+        audio_player = f"""
+            <div style="
+                background: rgba(26, 41, 66, 0.7);
+                padding: 15px;
+                border-radius: 10px;
+                border: 1px solid rgba(100, 181, 246, 0.2);
+                margin: 10px 0;
+            ">
+                <audio controls style="width: 100%;">
+                    <source src="data:audio/mp3;base64,{audio_b64}" type="audio/mp3">
+                    Your browser does not support the audio element.
+                </audio>
+            </div>
+        """
+        return audio_player
+    except Exception as e:
+        st.error(f"Error generating audio: {str(e)}")
+        return None
+
 def render_conversation(conversation):
+    """Updated render_conversation function with text-to-speech functionality"""
+    # st.markdown('<div class="conversation-container">', unsafe_allow_html=True)
+    
+    # Add text-to-speech button with play icon
+    st.markdown(
+        """
+        <div style="
+            background: rgba(26, 41, 66, 0.7);
+            padding: 20px;
+            border-radius: 10px;
+            border: 1px solid rgba(100, 181, 246, 0.2);
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        ">
+            <div style="
+                background: rgba(100, 181, 246, 0.2);
+                border-radius: 50%;
+                width: 40px;
+                height: 40px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                cursor: pointer;
+                transition: all 0.3s ease;
+            ">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z" fill="#64B5F6"/>
+                </svg>
+            </div>
+            <div>
+                <h4 style="color: #64B5F6; margin: 0; font-size: 16px;">Listen to Full Conversation</h4>
+                <p style="color: #A4B5C6; margin: 5px 0 0 0; font-size: 12px;">Click play to hear the conversation</p>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+    
+    # Convert conversation text to speech-friendly format
+    speech_text = conversation.replace("AGENT:", "Agent says:").replace("CUSTOMER:", "Customer says:")
+    audio_player = text_to_speech(speech_text)
+    if audio_player:
+        st.markdown(audio_player, unsafe_allow_html=True)
+    
+    # Add custom CSS for audio player styling
+    st.markdown(
+        """
+        <style>
+        audio {
+            filter: invert(100%) hue-rotate(180deg);
+            width: 100%;
+            height: 40px;
+        }
+        audio::-webkit-media-controls-panel {
+            background-color: rgba(26, 41, 66, 0.7);
+        }
+        audio::-webkit-media-controls-play-button {
+            background-color: #64B5F6;
+            border-radius: 50%;
+        }
+        audio::-webkit-media-controls-play-button:hover {
+            background-color: #82c4f8;
+        }
+        audio::-webkit-media-controls-current-time-display,
+        audio::-webkit-media-controls-time-remaining-display {
+            color: #64B5F6;
+        }
+        audio::-webkit-media-controls-timeline {
+            background-color: #64B5F6;
+            border-radius: 25px;
+            margin-left: 10px;
+            margin-right: 10px;
+        }
+        audio::-webkit-media-controls-volume-slider {
+            background-color: #64B5F6;
+            border-radius: 25px;
+            padding-left: 8px;
+            padding-right: 8px;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+    
+    # Render individual messages
     messages = conversation.split("\n")
     for message in messages:
         if message.startswith("AGENT:"):
@@ -696,105 +823,89 @@ def render_field(key, value, parent_key="", is_subsection=False):
                 st.markdown('<div style="text-align: left; color: #64B5F6; font-size: 0.8em; margin-bottom: 5px;">Missing</div>', 
                           unsafe_allow_html=True)
         
-        # Initialize session state for list items
+        # Initialize session state for list items if not already initialized
         if f"list_items_{field_id}" not in st.session_state:
             st.session_state[f"list_items_{field_id}"] = value.copy()
-        if f"new_item_{field_id}" not in st.session_state:
-            st.session_state[f"new_item_{field_id}"] = ""
         
-        # Show list summary
-        num_items = len(st.session_state[f"list_items_{field_id}"])
-        with st.expander(f"📋 {key.replace('_', ' ').title()} ({num_items} items)", expanded=False):
-            updated_list = []
-            
-            # Display existing items
-            for i, item in enumerate(st.session_state[f"list_items_{field_id}"]):
-                with st.container():
-                    col1, col2, col3 = st.columns([3, 0.5, 0.5])
-                    with col1:
-                        # Store the input value in session state
-                        if f"input_{field_id}_{i}" not in st.session_state:
-                            st.session_state[f"input_{field_id}_{i}"] = item
-                        
-                        input_value = st.text_area(
-                            f"Item {i + 1}", 
-                            value=st.session_state[f"input_{field_id}_{i}"],
-                            key=f"text_{field_id}_{i}",
-                            on_change=lambda i=i, v=st.session_state[f"text_{field_id}_{i}"]: 
-                                setattr(st.session_state, f"input_{field_id}_{i}", v)
-                        )
-                        
-                        # Update session state with new value
-                        st.session_state[f"input_{field_id}_{i}"] = input_value
+        updated_list = []
+        
+        # Display existing items
+        for i, item in enumerate(st.session_state[f"list_items_{field_id}"]):
+            with st.container():
+                col1, col2, col3 = st.columns([3, 0.5, 0.5])
+                with col1:
+                    # Initialize session state for this item if not already done
+                    if f"input_{field_id}_{i}" not in st.session_state:
+                        st.session_state[f"input_{field_id}_{i}"] = item
                     
-                    with col2:
-                        is_incorrect = st.checkbox(
-                            "❌",
-                            key=f"incorrect_{field_id}_{i}",
-                            label_visibility="collapsed",
-                            help="Click to mark as incorrect"
-                        )
-                    with col3:
-                        is_missing = st.checkbox(
-                            "⚠️",
-                            key=f"missing_{field_id}_{i}",
-                            label_visibility="collapsed",
-                            help="Click to mark as missing"
-                        )
-                    
-                    remark = ""
-                    if is_incorrect or is_missing:
-                        remark = st.text_area(
-                            "Remark",
-                            key=f"remark_{field_id}_{i}",
-                            placeholder="Enter your remark here...",
-                            height=100
-                        )
-                    
-                    updated_list.append({
-                        "value": st.session_state[f"input_{field_id}_{i}"],  # Use session state value
-                        "is_correct": not is_incorrect,
-                        "is_missing": is_missing,
-                        "remark": remark
-                    })
-            
-            # Add new item section
-            st.markdown(
-                '''
-                <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid rgba(100, 181, 246, 0.2);">
-                    <div style="color: #64B5F6; font-size: 0.9em; margin-bottom: 10px;">Add New Item</div>
-                </div>
-                ''',
-                unsafe_allow_html=True
-            )
-            
-            # New item input
-            new_item = st.text_input(
-                "",
-                key=f"new_item_input_{field_id}",
-                placeholder="Enter new item...",
-                label_visibility="collapsed"
-            )
-            
-            # Store new item in session state
-            if new_item:
-                st.session_state[f"new_item_{field_id}"] = new_item
-            
-            # Process changes when form is submitted
-            if st.session_state.get("form_submitted", False):
-                # Update list items with current text area values
-                st.session_state[f"list_items_{field_id}"] = [
-                    st.session_state[f"input_{field_id}_{i}"]
-                    for i in range(len(st.session_state[f"list_items_{field_id}"]))
-                ]
-                
-                # Add new item if exists
-                if st.session_state[f"new_item_{field_id}"]:
-                    st.session_state[f"list_items_{field_id}"].append(
-                        st.session_state[f"new_item_{field_id}"]
+                    input_value = st.text_area(
+                        f"Item {i + 1}", 
+                        value=st.session_state[f"input_{field_id}_{i}"],
+                        key=f"text_{field_id}_{i}"
                     )
-                    st.session_state[f"new_item_{field_id}"] = ""
-            
+                    
+                    # Update session state
+                    st.session_state[f"input_{field_id}_{i}"] = input_value
+                
+                with col2:
+                    is_incorrect = st.checkbox(
+                        "❌",
+                        key=f"incorrect_{field_id}_{i}",
+                        label_visibility="collapsed",
+                        help="Click to mark as incorrect"
+                    )
+                with col3:
+                    is_missing = st.checkbox(
+                        "⚠️",
+                        key=f"missing_{field_id}_{i}",
+                        label_visibility="collapsed",
+                        help="Click to mark as missing"
+                    )
+                
+                remark = ""
+                if is_incorrect or is_missing:
+                    remark = st.text_area(
+                        "Remark",
+                        key=f"remark_{field_id}_{i}",
+                        placeholder="Enter your remark here...",
+                        height=100
+                    )
+                
+                updated_list.append({
+                    "value": input_value,
+                    "is_correct": not is_incorrect,
+                    "is_missing": is_missing,
+                    "remark": remark
+                })
+        
+        # Add new item section
+        st.markdown(
+            '''
+            <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid rgba(100, 181, 246, 0.2);">
+                <div style="color: #64B5F6; font-size: 0.9em; margin-bottom: 10px;">Add New Item</div>
+            </div>
+            ''',
+            unsafe_allow_html=True
+        )
+        
+        # New item input
+        new_item = st.text_input(
+            "",
+            key=f"new_item_input_{field_id}",
+            placeholder="Enter new item...",
+            label_visibility="collapsed"
+        )
+        
+        # Add new item if there's input and form is submitted
+        if new_item and st.session_state.get("form_submitted", False):
+            st.session_state[f"list_items_{field_id}"].append(new_item)
+            updated_list.append({
+                "value": new_item,
+                "is_correct": True,
+                "is_missing": False,
+                "remark": ""
+            })
+        
         return updated_list
     
     else:
