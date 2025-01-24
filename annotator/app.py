@@ -5,6 +5,8 @@ import numpy as np
 from gtts import gTTS
 import base64
 import os
+from streamlit_chat import message
+import requests
 # Set page configuration for wide layout
 st.set_page_config(layout="wide", page_title="Call Transcript Annotation Tool")
 
@@ -24,6 +26,40 @@ def add_custom_css():
             border-bottom: 1px solid rgba(100, 181, 246, 0.2);
         }
         
+        /* Sticky Audio Player Container */
+        .sticky-audio {
+            position: sticky;
+            top: 0;
+            z-index: 999;
+            background: rgba(26, 41, 66, 0.95);
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(100, 181, 246, 0.2);
+        }
+        
+        /* Sticky Tabs */
+        .stTabs {
+            position: sticky !important;
+            top: 0;
+            z-index: 998;
+            background: transparent;
+        }
+        
+        /* Tab List Styling */
+        .stTabs [data-baseweb="tab-list"] {
+            position: sticky !important;
+            top: 0;
+            z-index: 998;
+            background: rgba(26, 41, 66, 0.95) !important;
+            padding: 15px 10px;
+            border-radius: 15px;
+            margin-bottom: 25px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(100, 181, 246, 0.1);
+        }
+
         /* Title Styling */
         h1 {
             color: #64B5F6;
@@ -49,15 +85,6 @@ def add_custom_css():
         }
         
         /* Tab Styling */
-        .stTabs [data-baseweb="tab-list"] {
-            background: rgba(26, 41, 66, 0.7);
-            padding: 15px 10px;
-            border-radius: 15px;
-            margin-bottom: 25px;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(100, 181, 246, 0.1);
-        }
-        
         .stTabs [data-baseweb="tab"] {
             color: #64B5F6;
             background-color: transparent;
@@ -316,9 +343,6 @@ def text_to_speech(text):
         with open(audio_path, "rb") as audio_file:
             audio_bytes = audio_file.read()
             audio_b64 = base64.b64encode(audio_bytes).decode()
-            
-        # Remove the temporary file
-        os.remove(audio_path)
         
         # Create audio player HTML with custom styling
         audio_player = f"""
@@ -342,39 +366,34 @@ def text_to_speech(text):
 
 def render_conversation(conversation):
     """Updated render_conversation function with text-to-speech functionality"""
-    # st.markdown('<div class="conversation-container">', unsafe_allow_html=True)
-    
-    # Add text-to-speech button with play icon
+    # Add text-to-speech button with play icon in a sticky container
     st.markdown(
         """
-        <div style="
-            background: rgba(26, 41, 66, 0.7);
-            padding: 20px;
-            border-radius: 10px;
-            border: 1px solid rgba(100, 181, 246, 0.2);
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        ">
+        <div class="sticky-audio">
             <div style="
-                background: rgba(100, 181, 246, 0.2);
-                border-radius: 50%;
-                width: 40px;
-                height: 40px;
                 display: flex;
                 align-items: center;
-                justify-content: center;
-                cursor: pointer;
-                transition: all 0.3s ease;
+                gap: 15px;
             ">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z" fill="#64B5F6"/>
-                </svg>
-            </div>
-            <div>
-                <h4 style="color: #64B5F6; margin: 0; font-size: 16px;">Listen to Full Conversation</h4>
-                <p style="color: #A4B5C6; margin: 5px 0 0 0; font-size: 12px;">Click play to hear the conversation</p>
+                <div style="
+                    background: rgba(100, 181, 246, 0.2);
+                    border-radius: 50%;
+                    width: 40px;
+                    height: 40px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    cursor: pointer;
+                    transition: all 0.3s ease;
+                ">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z" fill="#64B5F6"/>
+                    </svg>
+                </div>
+                <div>
+                    <h4 style="color: #64B5F6; margin: 0; font-size: 16px;">Listen to Full Conversation</h4>
+                    <p style="color: #A4B5C6; margin: 5px 0 0 0; font-size: 12px;">Click play to hear the conversation</p>
+                </div>
             </div>
         </div>
         """,
@@ -539,202 +558,308 @@ def show_flash_message(message, type="success"):
     }
     st.markdown(styles[type], unsafe_allow_html=True)
 
+def get_annotation_guidelines():
+    """Return the annotation guidelines as a string"""
+    return """
+    Annotation Guidelines for Call Transcript Analysis:
+
+    General Principles:
+    - Accuracy First: Always verify information before marking as correct
+    - Consistency: Use same standards across all annotations
+    - Documentation: Provide clear remarks for incorrect/missing information
+    - Context Matters: Consider full conversation context
+    - Objectivity: Base annotations solely on transcript content
+
+    Section-Specific Guidelines:
+
+    1. Call Details:
+    - Call ID: Must match format (e.g., "12345")
+    - Call Date: Must be YYYY-MM-DD format
+    - Call Type: Must match predefined categories
+
+    2. Client Profile:
+    - Client Age: Must be between 18-100
+    - Current Balance: Must be numeric and non-negative
+    - Years to Retirement: Must be positive integer
+
+    3. Retirement Goals:
+    - Goal Flag: Must be boolean
+    - Goal List: Must contain valid retirement goals
+    - Target Age: Must be greater than current age
+
+    Common Scenarios and Validations:
+    - Mark incorrect if format doesn't match requirements
+    - Mark missing if required information is not present
+    - Document conflicts and inconsistencies
+    - Flag ambiguous or unclear information
+    - Note any assumptions made during annotation
+
+    Best Practices:
+    - Read entire transcript before annotating
+    - Cross-reference information across sections
+    - Verify numerical values
+    - Document all assumptions
+    - Review for consistency
+    """
+
+def get_llm_response(prompt):
+    """Get response from Ollama using Phi-2 model"""
+    try:
+        # Make request to Ollama API
+        response = requests.post(
+            'http://localhost:11434/api/generate',
+            json={
+                'model': 'phi4',
+                'prompt': prompt,
+                'stream': False
+            }
+        )
+        
+        if response.status_code == 200:
+            return response.json()['response']
+        else:
+            return f"Error: Unable to get response from Ollama (Status code: {response.status_code})"
+    except Exception as e:
+        return f"Error generating response: {str(e)}"
+
+def chat_interface():
+    """Create the chat interface"""
+    if 'chat_history' not in st.session_state:
+        st.session_state.chat_history = []
+    
+    st.markdown('<div class="subheader">Chat Assistant</div>', unsafe_allow_html=True)
+    st.markdown("<p style='color: #64B5F6; font-size: 0.9em;'>I'm trained on the annotation guidelines and can help you with any questions about the annotation process.</p>", unsafe_allow_html=True)
+    
+    # Chat messages container
+    st.markdown('<div class="chat-messages">', unsafe_allow_html=True)
+    for msg in st.session_state.chat_history:
+        message(msg["content"], is_user=msg["role"] == "user")
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Chat input container
+    st.markdown('<div class="chat-input-container">', unsafe_allow_html=True)
+    def handle_input():
+        if st.session_state.chat_input and st.session_state.chat_input.strip():
+            user_message = st.session_state.chat_input.strip()
+            
+            # Add user message to history
+            st.session_state.chat_history.append({
+                "role": "user",
+                "content": user_message
+            })
+            
+            # Get response from Ollama
+            assistant_response = get_llm_response(user_message)
+            
+            # Add assistant response to history
+            st.session_state.chat_history.append({
+                "role": "assistant",
+                "content": assistant_response
+            })
+            
+            # Trigger rerun
+            st.rerun()
+    
+    st.text_input(
+        "Ask me anything about the annotation process...",
+        key="chat_input",
+        on_change=handle_input
+    )
+    st.markdown('</div>', unsafe_allow_html=True)
+
 # Main app logic
 def main():
     st.title("📞 Call Transcript Annotation Tool")
     add_custom_css()
-
-    # Always try to load from parquet file
+    
+    # Initialize sample data with hardcoded values
+    sample_data = {
+        "interaction_id": ["INT001", "INT002"],
+        "annotator": ["Alice", "Bob"],
+        "conversations": [
+            "AGENT: Hello! Thank you for calling. How may I help you today?\nCUSTOMER: Hi, I'm having issues with my account login.\nAGENT: I understand. Can you please provide your account number?\nCUSTOMER: Yes, it's 12345678.",
+            "AGENT: Good morning! How can I assist you today?\nCUSTOMER: I'd like to discuss retirement planning.\nAGENT: I'd be happy to help with that. Could you please verify your account number?\nCUSTOMER: Sure, it's 87654321."
+        ],
+        "llm_output": [
+            json.dumps({
+                "call_details": {
+                    "call_id": "12345",
+                    "call_date": "2024-12-13",
+                    "call_type": "Initial Consultation"
+                },
+                "client_profile": {
+                    "client_age": 45,
+                    "current_401k_balance": 100000.0,
+                    "years_to_retirement": 20
+                },
+                "retirement_test": {
+                    "retirement_goal_flag": True,
+                    "retirement_goals": ["travel", "start business"],
+                    "retirement_age": 65
+                }
+            }),
+            json.dumps({
+                "call_details": {
+                    "call_id": "67890",
+                    "call_date": "2024-12-14",
+                    "call_type": "Follow-up"
+                },
+                "client_profile": {
+                    "client_age": 35,
+                    "current_401k_balance": 75000.0,
+                    "years_to_retirement": 30
+                },
+                "retirement_test": {
+                    "retirement_goal_flag": True,
+                    "retirement_goals": ["early retirement", "passive income"],
+                    "retirement_age": 55
+                }
+            })
+        ],
+        "annotated_output": [None, None],
+        "last_updated": [pd.Timestamp.now(), pd.Timestamp.now()]
+    }
+    
+    # Create DataFrame from sample data
     try:
-        df = pd.read_parquet("annotations1.parquet")
-    except FileNotFoundError:
-        # If file doesn't exist, initialize with sample data
-        data = [
-            {
-                "interaction_id": "INT001",
-                "annotator": "Alice",
-                "conversations": "AGENT: Hello! Thank you for calling. How may I help you today?\nCUSTOMER: Hi, I'm having issues with my account login.\nAGENT: I understand. Can you please provide your account number?\nCUSTOMER: Yes, it's 12345678.",
-                "llm_output": json.dumps({
-                    "call_details": {
-                        "call_id": "12345Hello! Thank you for calling. How may I help you todaHello! Thank you for calling. How may I help you todaHello! Thank you for calling. How may I help you todaHello! Thank you for calling. How may I help you toda",
-                        "call_timestamp":{"call_date": "2024-12-13"},
-                        "call_type": "Initial Consultation"
-                    },
-                    "client_profile": {
-                        "client_age": 18,
-                        "current_401k_balance": 0.0,
-                        "years_to_retirement": np.nan
-                        },
-                    "retirement_test": [{"retirement_goal_flag": True},{"retirement_goals": ["travel after retirement"]},{"retirement_age": 65}],
-                    "retirement_goals": ["travel after retirement"]
-                })
-            },
-            {
-                "interaction_id": "INT002",
-                "annotator": "Bob",
-                "conversations": "AGENT: Hello! How can I assist you today?\nCUSTOMER: I'm interested in upgrading my plan.\nAGENT: Sure, let me provide you with the available options.",
-                "llm_output": json.dumps({
-                    "call_details": {
-                        "call_id": "12346",
-                        "call_timestamp":{"call_date": "2024-12-14"},
-                        "call_type": "Plan Upgrade"
-                    },
-                    "client_profile": {
-                        "client_age": 35,
-                        "current_401k_balance": 50000.0,
-                        "years_to_retirement": 30
-                    },
-                    "retirement_goals": [
-                        "retire early",
-                        "retire in 10 years",
-                        "retire in 20 years"
-                    ]
-                })
-            }
-        ]
-        df = pd.DataFrame(data)
-        # Save initial data
-        df.to_parquet("annotations.parquet", index=False)
-
-    # Store in session state only for form handling
-    st.session_state.df = df
-
-    if st.session_state.get("show_flash", False):
-        show_flash_message(
-            st.session_state["flash_message"], 
-            st.session_state["flash_type"]
-        )
-        # Clear the flash message
-        st.session_state["show_flash"] = False
-
-    # Move filters to sidebar
-    with st.sidebar:
-        st.markdown('<div class="subheader">Filter Conversations</div>', unsafe_allow_html=True)
+        annotations_df = pd.DataFrame(sample_data)
+        # Load annotations
+        # annotations_df = load_annotations()
         
-        annotators = sorted(df['annotator'].unique())
-        selected_annotator = st.selectbox("Select Annotator", annotators)
-
-        # Filter DataFrame by selected annotator
-        filtered_df = df[df['annotator'] == selected_annotator]
-        interaction_ids = sorted(filtered_df['interaction_id'].unique())
-        selected_interaction_id = st.selectbox("Select Interaction ID", interaction_ids)
-
-    # Create tabs with three options
-    tabs = st.tabs(["📝 Transcript & Annotation", "📊 View Annotations", "📋 Annotation Guidelines"])
+        # Add filters in the sidebar
+        st.sidebar.markdown("## Filter Conversations")
+        
+        # Annotator selection
+        selected_annotator = st.sidebar.selectbox(
+            "Select Annotator",
+            options=annotations_df['annotator'].unique(),
+            key='annotator_select'
+        )
+        
+        # Interaction ID selection
+        selected_interaction_id = st.sidebar.selectbox(
+            "Select Interaction ID",
+            options=annotations_df['interaction_id'].unique(),
+            key='interaction_select'
+        )
+        
+        # Filter the dataframe
+        filtered_df = annotations_df[
+            (annotations_df['annotator'] == selected_annotator) &
+            (annotations_df['interaction_id'] == selected_interaction_id)
+        ]
+        
+    except Exception as e:
+        st.error(f"Error loading data: {str(e)}")
+        return
+    
+    # Create tabs
+    tabs = st.tabs([
+        "📝 Transcript & Annotation", 
+        "📊 View Annotations", 
+        "📋 Annotation Guidelines",
+        "💬 Chat Assistant"
+    ])
     
     with tabs[0]:
-        # Retrieve the row based on selected annotator & interaction ID
-        row_df = filtered_df[
-            (filtered_df['annotator'] == selected_annotator) &
-            (filtered_df['interaction_id'] == selected_interaction_id)
-        ].iloc[0]
+        if not filtered_df.empty:
+            # Get the first (and should be only) row
+            row_df = filtered_df.iloc[0]
+            
+            col1, col2 = st.columns([1, 1])
 
-        # ---------------------
-        # STEP 2: LEFT & RIGHT LAYOUT
-        # ---------------------
-        col1, col2 = st.columns([1, 1])
+            with col1:
+                st.markdown('<div class="subheader">Call Transcript</div>', unsafe_allow_html=True)
+                render_conversation(row_df['conversations'])
 
-        with col1:
-            st.markdown('<div class="subheader">Call Transcript</div>', unsafe_allow_html=True)
-            render_conversation(row_df['conversations'])
+            with col2:
+                st.markdown('<div class="subheader">Call Annotation</div>', unsafe_allow_html=True)
+                with st.form("annotation_form"):
+                    try:
+                        llm_output_data = json.loads(row_df['llm_output'])
+                    except json.JSONDecodeError:
+                        llm_output_data = {}
 
-        with col2:
-            st.markdown('<div class="subheader">Call Annotation</div>', unsafe_allow_html=True)
-            with st.form("annotation_form"):
-                try:
-                    llm_output_data = json.loads(row_df['llm_output'])
-                except json.JSONDecodeError:
-                    llm_output_data = {}
-
-                # Dynamically create tabs based on the subsections in llm_output_data
-                subsections = list(llm_output_data.keys())
-                if not subsections:
-                    st.warning("No annotation sections found in the data")
-                else:
-                    # Create tabs dynamically
-                    annotation_tabs = st.tabs([section.replace('_', ' ').title() for section in subsections])
-                    
-                    # Dictionary to store updates for each section
-                    updated_sections = {}
-                    
-                    # Render each section in its corresponding tab
-                    for tab, section in zip(annotation_tabs, subsections):
-                        with tab:
-                            st.markdown(f'<div class="section-header">{section.replace("_", " ").title()}</div>', 
-                                      unsafe_allow_html=True)
-                            updated_sections[section] = render_field(section, llm_output_data.get(section, {}), is_subsection=True)
-
-                    submitted = st.form_submit_button("Submit")
-                    if submitted:
-                        st.session_state["form_submitted"] = True
-                        try:
-                            row_index = row_df.name
-                            current_df = pd.read_parquet("annotations.parquet")
-                            current_df.at[row_index, 'annotated_output'] = json.dumps(updated_sections, indent=2)
-                            current_df.at[row_index, 'last_updated'] = pd.Timestamp.now()
-                            current_df.to_parquet("annotations.parquet", index=False)
-                            st.session_state.df = current_df
-                            st.session_state["show_flash"] = True
-                            st.session_state["flash_message"] = "Annotations saved successfully!"
-                            st.session_state["flash_type"] = "success"
-                            st.rerun()
-                        except Exception as e:
-                            st.session_state["show_flash"] = True
-                            st.session_state["flash_message"] = f"Error saving annotation: {str(e)}"
-                            st.session_state["flash_type"] = "error"
-                            st.rerun()
+                    # Dynamically create tabs based on the subsections in llm_output_data
+                    subsections = list(llm_output_data.keys())
+                    if not subsections:
+                        st.warning("No annotation sections found in the data")
                     else:
-                        st.session_state["form_submitted"] = False
-            st.markdown('</div>', unsafe_allow_html=True)
+                        # Create tabs dynamically
+                        annotation_tabs = st.tabs([section.replace('_', ' ').title() for section in subsections])
+                        
+                        # Dictionary to store updates for each section
+                        updated_sections = {}
+                        
+                        # Render each section in its corresponding tab
+                        for tab, section in zip(annotation_tabs, subsections):
+                            with tab:
+                                st.markdown(f'<div class="section-header">{section.replace("_", " ").title()}</div>', 
+                                          unsafe_allow_html=True)
+                                updated_sections[section] = render_field(section, llm_output_data.get(section, {}), is_subsection=True)
+
+                        submitted = st.form_submit_button("Submit")
+                        if submitted:
+                            st.session_state["form_submitted"] = True
+                            try:
+                                row_index = row_df.name
+                                current_df = pd.read_parquet("annotations.parquet")
+                                current_df.at[row_index, 'annotated_output'] = json.dumps(updated_sections, indent=2)
+                                current_df.at[row_index, 'last_updated'] = pd.Timestamp.now()
+                                current_df.to_parquet("annotations.parquet", index=False)
+                                st.session_state.df = current_df
+                                st.session_state["show_flash"] = True
+                                st.session_state["flash_message"] = "Annotations saved successfully!"
+                                st.session_state["flash_type"] = "success"
+                                st.rerun()
+                            except Exception as e:
+                                st.session_state["show_flash"] = True
+                                st.session_state["flash_message"] = f"Error saving annotation: {str(e)}"
+                                st.session_state["flash_type"] = "error"
+                                st.rerun()
+                        else:
+                            st.session_state["form_submitted"] = False
+                st.markdown('</div>', unsafe_allow_html=True)
+        else:
+            st.warning("No data found for the selected filters.")
 
     with tabs[1]:
         st.subheader("View Submitted Annotations")
-        
-        # Load annotations
-        annotations_df = load_annotations()
-        
+        # View annotations tab content
         if not annotations_df.empty and 'llm_output' in annotations_df.columns and 'annotated_output' in annotations_df.columns:
             # Filter out rows where annotated_output is None or same as llm_output
-            annotations_df = annotations_df[
+            view_df = annotations_df[
                 (annotations_df['annotated_output'].notna()) & 
                 (annotations_df['llm_output'] != annotations_df['annotated_output'])
             ]
             
-            if not annotations_df.empty:
+            if not view_df.empty:
                 # Add filters
                 col1, col2 = st.columns(2)
                 with col1:
-                    selected_annotator = st.selectbox(
+                    view_annotator = st.selectbox(
                         "Filter by Annotator",
-                        options=['All'] + sorted(annotations_df['annotator'].unique().tolist())
+                        options=['All'] + sorted(view_df['annotator'].unique().tolist())
                     )
                 with col2:
-                    selected_interaction = st.selectbox(
+                    view_interaction = st.selectbox(
                         "Filter by Interaction ID",
-                        options=['All'] + sorted(annotations_df['interaction_id'].unique().tolist())
+                        options=['All'] + sorted(view_df['interaction_id'].unique().tolist())
                     )
                 
                 # Apply filters
-                filtered_df = annotations_df.copy()
-                if selected_annotator != 'All':
-                    filtered_df = filtered_df[filtered_df['annotator'] == selected_annotator]
-                if selected_interaction != 'All':
-                    filtered_df = filtered_df[filtered_df['interaction_id'] == selected_interaction]
+                if view_annotator != 'All':
+                    view_df = view_df[view_df['annotator'] == view_annotator]
+                if view_interaction != 'All':
+                    view_df = view_df[view_df['interaction_id'] == view_interaction]
                 
                 # Display annotations
-                if not filtered_df.empty:
-                    for _, row in filtered_df.iterrows():
-                        # Format the last_updated timestamp, handling None case
-                        last_updated_str = (
-                            row['last_updated'].strftime('%Y-%m-%d %H:%M:%S') 
-                            if pd.notnull(row['last_updated']) 
-                            else "Not updated yet"
-                        )
-                        
+                if not view_df.empty:
+                    for _, row in view_df.iterrows():
                         with st.expander(
                             f"Interaction: {row['interaction_id']} - "
                             f"Annotator: {row['annotator']} - "
-                            f"Last Updated: {last_updated_str}"
+                            f"Last Updated: {row.get('last_updated', 'Not updated')}"
                         ):
                             col1, col2 = st.columns(2)
                             with col1:
@@ -742,7 +867,6 @@ def main():
                                 st.json(json.loads(row['llm_output']))
                             with col2:
                                 st.markdown("#### Annotated Output")
-                                # Handle None case for annotated_output
                                 if pd.notnull(row['annotated_output']):
                                     st.json(json.loads(row['annotated_output']))
                                 else:
@@ -756,54 +880,157 @@ def main():
 
     with tabs[2]:
         st.markdown("""
-        # Annotation Guidelines
+        # 📋 Annotation Guidelines
         
         ## Overview
-        This tool is designed to help annotate call transcripts with high accuracy and consistency. Follow these guidelines carefully when making annotations.
+        This comprehensive guide outlines the standards and procedures for annotating call transcripts. Follow these guidelines carefully to ensure consistency and accuracy across all annotations.
         
         ## General Principles
         1. **Accuracy First**: Always verify information before marking it as correct
         2. **Consistency**: Use the same standards across all annotations
-        3. **Documentation**: Always provide clear remarks for incorrect or missing information
+        3. **Documentation**: Provide clear remarks for any incorrect or missing information
+        4. **Context Matters**: Consider the full conversation context when annotating
+        5. **Objectivity**: Base annotations solely on transcript content, not assumptions
         
-        ## Using the Validation Controls
-        - **❌ Incorrect Marker**: Use when the information is present but incorrect
+        ## Validation Controls
+        - **❌ Incorrect Marker**: Use when information is present but incorrect
         - **⚠️ Missing Marker**: Use when required information is not present
-        - **Remarks**: Always provide specific, clear remarks when marking items as incorrect or missing
+        - **Remarks Field**: Required when marking items as incorrect or missing
         
         ## Section-Specific Guidelines
         
-        ### Call Details
-        - Verify call ID format and accuracy
-        - Ensure call timestamp matches the conversation
-        - Confirm call type matches the conversation content
+        ### 1. Call Details
+        #### Required Fields:
+        - **Call ID**: Must match the format (e.g., "12345")
+        - **Call Date**: Must be in YYYY-MM-DD format
+        - **Call Type**: Must match predefined categories
         
-        ### Client Profile
-        - Validate all numerical values (age, balance, etc.)
-        - Check for logical consistency in years/dates
-        - Flag any unrealistic or contradictory values
+        #### Common Scenarios:
+        - 🔍 **Incorrect Format**: Mark as incorrect if ID format doesn't match
+        - 🔍 **Future Dates**: Mark as incorrect if date is in the future
+        - 🔍 **Invalid Call Type**: Mark as incorrect if not in approved list
         
-        ### Retirement Goals
-        - Ensure goals are explicitly mentioned in the transcript
-        - Check for proper categorization of goals
-        - Flag any inferred goals that aren't directly stated
+        ### 2. Client Profile
+        #### Required Fields:
+        - **Client Age**: Must be between 18-100
+        - **Current Balance**: Must be numeric and non-negative
+        - **Years to Retirement**: Must be positive integer
         
-        ## Best Practices
-        1. **Read the Entire Transcript**: Before annotating, read the complete conversation
-        2. **Cross-Reference**: Verify information across different sections
-        3. **Be Specific**: When adding remarks, cite specific parts of the transcript
-        4. **Stay Objective**: Base annotations on transcript content, not assumptions
+        #### Common Scenarios:
+        - 🔍 **Age Discrepancy**: Mark if age conflicts with other information
+        - 🔍 **Balance Format**: Mark if balance includes non-numeric characters
+        - 🔍 **Retirement Timeline**: Mark if conflicts with age/goals
+        
+        ### 3. Retirement Goals
+        #### Required Fields:
+        - **Goal Flag**: Must be boolean
+        - **Goal List**: Must contain valid retirement goals
+        - **Target Age**: Must be greater than current age
+        
+        #### Common Scenarios:
+        - 🔍 **Implicit Goals**: Only mark goals explicitly mentioned
+        - 🔍 **Conflicting Goals**: Note contradictions in remarks
+        - 🔍 **Unrealistic Timeline**: Flag if retirement age is unrealistic
+        
+        ## Quality Control Checklist
+        
+        ### Before Annotation:
+        1. ✓ Read entire transcript thoroughly
+        2. ✓ Note key information while reading
+        3. ✓ Identify potential inconsistencies
+        
+        ### During Annotation:
+        1. ✓ Cross-reference information across sections
+        2. ✓ Verify numerical values
+        3. ✓ Check for logical consistency
+        4. ✓ Document all assumptions
+        
+        ### After Annotation:
+        1. ✓ Review all marked items
+        2. ✓ Verify all remarks are clear and specific
+        3. ✓ Check for missing required fields
+        4. ✓ Ensure consistency across sections
         
         ## Common Pitfalls to Avoid
-        - Don't assume information that isn't explicitly stated
-        - Avoid marking items as incorrect without proper justification
-        - Don't skip adding remarks when marking items as incorrect or missing
         
-        ## Quality Control
-        - Double-check all annotations before submission
-        - Ensure all remarks are clear and specific
-        - Verify that all required fields have been reviewed
+        ### 1. Assumption Errors
+        - ❌ Don't assume information not explicitly stated
+        - ❌ Don't infer demographics without evidence
+        - ❌ Don't extrapolate beyond given data
+        
+        ### 2. Validation Errors
+        - ❌ Don't mark correct information as incorrect
+        - ❌ Don't leave remarks empty for marked items
+        - ❌ Don't ignore format requirements
+        
+        ### 3. Consistency Errors
+        - ❌ Don't use different standards across calls
+        - ❌ Don't ignore conflicts between sections
+        - ❌ Don't skip validation steps
+        
+        ## Special Cases
+        
+        ### 1. Ambiguous Information
+        - 📝 Document uncertainty in remarks
+        - 📝 Note multiple possible interpretations
+        - 📝 Flag for review if critically ambiguous
+        
+        ### 2. Missing Context
+        - 📝 Mark information as missing
+        - 📝 Note specific missing context
+        - 📝 Don't make assumptions to fill gaps
+        
+        ### 3. Conflicting Information
+        - 📝 Document all conflicts
+        - 📝 Note which source seems more reliable
+        - 📝 Flag for review if unresolvable
+        
+        ## Best Practices for Remarks
+        
+        ### 1. Writing Clear Remarks
+        - ✍️ Be specific and concise
+        - ✍️ Reference relevant transcript portions
+        - ✍️ Use standard terminology
+        
+        ### 2. Documenting Issues
+        - ✍️ State the specific problem
+        - ✍️ Provide evidence from transcript
+        - ✍️ Suggest correct information if known
+        
+        ### 3. Handling Uncertainty
+        - ✍️ Note degree of uncertainty
+        - ✍️ List alternative interpretations
+        - ✍️ Explain impact on annotation
+        
+        ## Review Process
+        
+        ### 1. Self-Review
+        1. 🔍 Review all marked items
+        2. 🔍 Verify remark clarity
+        3. 🔍 Check for missed issues
+        
+        ### 2. Peer Review
+        1. 🔍 Another annotator reviews
+        2. 🔍 Compare interpretations
+        3. 🔍 Resolve disagreements
+        
+        ### 3. Final Validation
+        1. 🔍 Check all required fields
+        2. 🔍 Verify all marks have remarks
+        3. 🔍 Ensure consistency
+        
+        ## Support and Questions
+        
+        If you encounter situations not covered by these guidelines or have questions:
+        1. Consult with senior annotators
+        2. Document the scenario for future reference
+        3. Propose guideline updates if needed
+        
+        Remember: Quality annotations are crucial for improving our system. Take the time needed to ensure accuracy and completeness.
         """)
+
+    with tabs[3]:
+        chat_interface()
 
 def render_field(key, value, parent_key="", is_subsection=False):
     """Enhanced render_field function with validation controls"""
