@@ -609,7 +609,7 @@ def get_llm_response(prompt):
         response = requests.post(
             'http://localhost:11434/api/generate',
             json={
-                'model': 'phi',
+                'model': 'phi4',
                 'prompt': prompt,
                 'stream': True  # Enable streaming
             },
