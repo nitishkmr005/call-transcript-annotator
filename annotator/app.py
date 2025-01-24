@@ -5,7 +5,6 @@ import numpy as np
 from gtts import gTTS
 import base64
 import os
-
 # Set page configuration for wide layout
 st.set_page_config(layout="wide", page_title="Call Transcript Annotation Tool")
 
@@ -620,8 +619,8 @@ def main():
         interaction_ids = sorted(filtered_df['interaction_id'].unique())
         selected_interaction_id = st.selectbox("Select Interaction ID", interaction_ids)
 
-    # Create tabs with only two options
-    tabs = st.tabs(["📝 Transcript & Annotation", "📊 View Annotations"])
+    # Create tabs with three options
+    tabs = st.tabs(["📝 Transcript & Annotation", "📊 View Annotations", "📋 Annotation Guidelines"])
     
     with tabs[0]:
         # Retrieve the row based on selected annotator & interaction ID
@@ -754,6 +753,57 @@ def main():
                 st.info("No submitted annotations found.")
         else:
             st.info("No annotations available yet.")
+
+    with tabs[2]:
+        st.markdown("""
+        # Annotation Guidelines
+        
+        ## Overview
+        This tool is designed to help annotate call transcripts with high accuracy and consistency. Follow these guidelines carefully when making annotations.
+        
+        ## General Principles
+        1. **Accuracy First**: Always verify information before marking it as correct
+        2. **Consistency**: Use the same standards across all annotations
+        3. **Documentation**: Always provide clear remarks for incorrect or missing information
+        
+        ## Using the Validation Controls
+        - **❌ Incorrect Marker**: Use when the information is present but incorrect
+        - **⚠️ Missing Marker**: Use when required information is not present
+        - **Remarks**: Always provide specific, clear remarks when marking items as incorrect or missing
+        
+        ## Section-Specific Guidelines
+        
+        ### Call Details
+        - Verify call ID format and accuracy
+        - Ensure call timestamp matches the conversation
+        - Confirm call type matches the conversation content
+        
+        ### Client Profile
+        - Validate all numerical values (age, balance, etc.)
+        - Check for logical consistency in years/dates
+        - Flag any unrealistic or contradictory values
+        
+        ### Retirement Goals
+        - Ensure goals are explicitly mentioned in the transcript
+        - Check for proper categorization of goals
+        - Flag any inferred goals that aren't directly stated
+        
+        ## Best Practices
+        1. **Read the Entire Transcript**: Before annotating, read the complete conversation
+        2. **Cross-Reference**: Verify information across different sections
+        3. **Be Specific**: When adding remarks, cite specific parts of the transcript
+        4. **Stay Objective**: Base annotations on transcript content, not assumptions
+        
+        ## Common Pitfalls to Avoid
+        - Don't assume information that isn't explicitly stated
+        - Avoid marking items as incorrect without proper justification
+        - Don't skip adding remarks when marking items as incorrect or missing
+        
+        ## Quality Control
+        - Double-check all annotations before submission
+        - Ensure all remarks are clear and specific
+        - Verify that all required fields have been reviewed
+        """)
 
 def render_field(key, value, parent_key="", is_subsection=False):
     """Enhanced render_field function with validation controls"""
