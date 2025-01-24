@@ -603,27 +603,33 @@ def get_annotation_guidelines():
     """
 
 def get_llm_response(prompt):
-    """Get response from Ollama using Phi-2 model"""
+    """Get response from Ollama using Phi-2 model with streaming"""
     try:
-        # Make request to Ollama API
+        # Make request to Ollama API with streaming enabled
         response = requests.post(
             'http://localhost:11434/api/generate',
             json={
-                'model': 'phi4',
+                'model': 'phi',
                 'prompt': prompt,
-                'stream': False
-            }
+                'stream': True  # Enable streaming
+            },
+            stream=True  # Enable streaming for requests
         )
         
         if response.status_code == 200:
-            return response.json()['response']
+            # Return a generator that yields chunks of text
+            for line in response.iter_lines():
+                if line:
+                    chunk = json.loads(line)
+                    if 'response' in chunk:
+                        yield chunk['response']
         else:
-            return f"Error: Unable to get response from Ollama (Status code: {response.status_code})"
+            yield f"Error: Unable to get response from Ollama (Status code: {response.status_code})"
     except Exception as e:
-        return f"Error generating response: {str(e)}"
+        yield f"Error generating response: {str(e)}"
 
 def chat_interface():
-    """Create the chat interface"""
+    """Create the chat interface with streaming support"""
     if 'chat_history' not in st.session_state:
         st.session_state.chat_history = []
     
@@ -631,13 +637,14 @@ def chat_interface():
     st.markdown("<p style='color: #64B5F6; font-size: 0.9em;'>I'm trained on the annotation guidelines and can help you with any questions about the annotation process.</p>", unsafe_allow_html=True)
     
     # Chat messages container
-    st.markdown('<div class="chat-messages">', unsafe_allow_html=True)
-    for msg in st.session_state.chat_history:
-        message(msg["content"], is_user=msg["role"] == "user")
-    st.markdown('</div>', unsafe_allow_html=True)
+    chat_container = st.container()
+    with chat_container:
+        for msg in st.session_state.chat_history:
+            message(msg["content"], is_user=msg["role"] == "user", key=f"msg_{hash(msg['content'])}")
     
     # Chat input container
     st.markdown('<div class="chat-input-container">', unsafe_allow_html=True)
+    
     def handle_input():
         if st.session_state.chat_input and st.session_state.chat_input.strip():
             user_message = st.session_state.chat_input.strip()
@@ -648,17 +655,25 @@ def chat_interface():
                 "content": user_message
             })
             
-            # Get response from Ollama
-            assistant_response = get_llm_response(user_message)
+            # Create a placeholder for streaming response
+            with chat_container:
+                message_placeholder = st.empty()
+                full_response = ""
+                
+                # Stream the response
+                for response_chunk in get_llm_response(user_message):
+                    full_response += response_chunk
+                    # Update the message placeholder with accumulated response
+                    message_placeholder.markdown(full_response)
             
-            # Add assistant response to history
+            # Add complete response to chat history
             st.session_state.chat_history.append({
                 "role": "assistant",
-                "content": assistant_response
+                "content": full_response
             })
             
-            # Trigger rerun
-            st.rerun()
+            # Clear input
+            st.session_state.chat_input = ""
     
     st.text_input(
         "Ask me anything about the annotation process...",
