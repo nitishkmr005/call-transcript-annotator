@@ -324,6 +324,143 @@ def add_custom_css():
             border-color: #64B5F6 !important;
             box-shadow: 0 0 0 2px rgba(100, 181, 246, 0.2) !important;
         }
+
+        /* Status Badge Styles */
+        .status-badge {
+            padding: 8px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 8px 0;
+            transition: all 0.3s ease;
+        }
+        
+        .status-badge:before {
+            content: "";
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        
+        .status-not-started {
+            background: rgba(158, 158, 158, 0.1);
+            color: #9E9E9E;
+            border: 1px solid rgba(158, 158, 158, 0.2);
+        }
+        
+        .status-not-started:before {
+            background: #9E9E9E;
+            box-shadow: 0 0 8px rgba(158, 158, 158, 0.5);
+        }
+        
+        .status-in-progress {
+            background: rgba(255, 193, 7, 0.1);
+            color: #FFC107;
+            border: 1px solid rgba(255, 193, 7, 0.2);
+        }
+        
+        .status-in-progress:before {
+            background: #FFC107;
+            box-shadow: 0 0 8px rgba(255, 193, 7, 0.5);
+        }
+        
+        .status-completed {
+            background: rgba(76, 175, 80, 0.1);
+            color: #4CAF50;
+            border: 1px solid rgba(76, 175, 80, 0.2);
+        }
+        
+        .status-completed:before {
+            background: #4CAF50;
+            box-shadow: 0 0 8px rgba(76, 175, 80, 0.5);
+        }
+        
+        /* Status Progress Bar */
+        .status-progress {
+            width: 100%;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            margin-top: 15px;
+            overflow: hidden;
+        }
+        
+        .status-progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #64B5F6, #2196F3);
+            border-radius: 2px;
+            transition: width 0.3s ease;
+        }
+        
+        /* Sidebar Status Styles */
+        .sidebar-status-container {
+            background: rgba(26, 41, 66, 0.7);
+            border-radius: 12px;
+            padding: 15px;
+            margin: 20px 0;
+            border: 1px solid rgba(100, 181, 246, 0.2);
+            backdrop-filter: blur(10px);
+        }
+        
+        .sidebar-status-header {
+            color: #64B5F6;
+            font-size: 0.9em;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 500;
+        }
+        
+        /* Horizontal Progress Container */
+        .horizontal-progress-container {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            background: rgba(26, 41, 66, 0.7);
+            padding: 20px;
+            border-radius: 12px;
+            margin: 20px 0;
+            border: 1px solid rgba(100, 181, 246, 0.2);
+        }
+        
+        .progress-stats {
+            display: flex;
+            gap: 15px;
+            flex-grow: 1;
+        }
+        
+        .progress-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 200px;
+        }
+        
+        .horizontal-status-badge {
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex: 1;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+        
+        .horizontal-progress-bar {
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            overflow: hidden;
+            margin-top: 10px;
+            width: 100%;
+        }
         </style>
         """,
         unsafe_allow_html=True
@@ -609,7 +746,7 @@ def get_llm_response(prompt):
         response = requests.post(
             'http://localhost:11434/api/generate',
             json={
-                'model': 'phi4',
+                'model': 'phi',
                 'prompt': prompt,
                 'stream': True  # Enable streaming
             },
@@ -691,6 +828,7 @@ def main():
     sample_data = {
         "interaction_id": ["INT001", "INT002"],
         "annotator": ["Alice", "Bob"],
+        "status": ["Not Started", "In Progress"],  # Add status field
         "conversations": [
             "AGENT: Hello! Thank you for calling. How may I help you today?\nCUSTOMER: Hi, I'm having issues with my account login.\nAGENT: I understand. Can you please provide your account number?\nCUSTOMER: Yes, it's 12345678.",
             "AGENT: Good morning! How can I assist you today?\nCUSTOMER: I'd like to discuss retirement planning.\nAGENT: I'd be happy to help with that. Could you please verify your account number?\nCUSTOMER: Sure, it's 87654321."
@@ -735,83 +873,143 @@ def main():
         "last_updated": [pd.Timestamp.now(), pd.Timestamp.now()]
     }
     
-    # Create DataFrame from sample data
     try:
         annotations_df = pd.DataFrame(sample_data)
-        # Load annotations
-        # annotations_df = load_annotations()
         
         # Add filters in the sidebar
         st.sidebar.markdown("## Filter Conversations")
         
-        # Annotator selection
+        # Annotator selection with unique key
         selected_annotator = st.sidebar.selectbox(
             "Select Annotator",
             options=annotations_df['annotator'].unique(),
-            key='annotator_select'
+            key='sidebar_annotator_select'
         )
         
-        # Interaction ID selection
+        # Interaction ID selection with unique key
         selected_interaction_id = st.sidebar.selectbox(
             "Select Interaction ID",
             options=annotations_df['interaction_id'].unique(),
-            key='interaction_select'
+            key='sidebar_interaction_select'
         )
         
-        # Filter the dataframe
+        # Add separator
+        st.sidebar.markdown("<hr style='margin: 25px 0; border: none; border-top: 1px solid rgba(100, 181, 246, 0.2);'>", unsafe_allow_html=True)
+        
+        # Get current status for selected annotation
         filtered_df = annotations_df[
             (annotations_df['annotator'] == selected_annotator) &
             (annotations_df['interaction_id'] == selected_interaction_id)
         ]
         
-    except Exception as e:
-        st.error(f"Error loading data: {str(e)}")
-        return
-    
-    # Create tabs
-    tabs = st.tabs([
-        "📝 Transcript & Annotation", 
-        "📊 View Annotations", 
-        "📋 Annotation Guidelines",
-        "💬 Chat Assistant"
-    ])
-    
-    with tabs[0]:
         if not filtered_df.empty:
-            # Get the first (and should be only) row
-            row_df = filtered_df.iloc[0]
+            current_status = filtered_df['status'].iloc[0]
             
-            col1, col2 = st.columns([1, 1])
+            # Add status selector in sidebar with unique key
+            st.sidebar.markdown(
+                f"""
+                <div class="sidebar-status-container">
+                    <div class="sidebar-status-header">Current Annotation Status</div>
+                    <div class="status-badge status-{current_status.lower().replace(' ', '-')}">
+                        {current_status}
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+            
+            # Status selector in sidebar with unique key
+            new_status = st.sidebar.selectbox(
+                "Update Status",
+                options=["Not Started", "In Progress", "Completed"],
+                index=["Not Started", "In Progress", "Completed"].index(current_status),
+                key='sidebar_status_select'
+            )
+            
+            # Update status if changed
+            if new_status != current_status:
+                try:
+                    row_index = filtered_df.index[0]
+                    annotations_df.at[row_index, 'status'] = new_status
+                    annotations_df.at[row_index, 'last_updated'] = pd.Timestamp.now()
+                    st.session_state.df = annotations_df
+                    st.experimental_rerun()
+                except Exception as e:
+                    st.error(f"Error updating status: {str(e)}")
+        
+        # Create tabs
+        tabs = st.tabs([
+            "📝 Transcript & Annotation", 
+            "📊 View Annotations", 
+            "📋 Annotation Guidelines",
+            "💬 Chat Assistant"
+        ])
+        
+        with tabs[0]:
+            if not filtered_df.empty:
+                # Get the first (and should be only) row
+                row_df = filtered_df.iloc[0]
+                
+                col1, col2 = st.columns([1, 1])
+                
+                with col1:
+                    st.markdown('<div class="subheader">Call Transcript</div>', unsafe_allow_html=True)
+                    render_conversation(row_df['conversations'])
+                
+                with col2:
+                    st.markdown('<div class="subheader">Call Annotation</div>', unsafe_allow_html=True)
+                    with st.form("annotation_form"):
+                        try:
+                            llm_output_data = json.loads(row_df['llm_output'])
+                        except json.JSONDecodeError:
+                            llm_output_data = {}
 
-            with col1:
-                st.markdown('<div class="subheader">Call Transcript</div>', unsafe_allow_html=True)
-                render_conversation(row_df['conversations'])
-
-            with col2:
-                st.markdown('<div class="subheader">Call Annotation</div>', unsafe_allow_html=True)
-                with st.form("annotation_form"):
-                    try:
-                        llm_output_data = json.loads(row_df['llm_output'])
-                    except json.JSONDecodeError:
-                        llm_output_data = {}
-
-                    # Dynamically create tabs based on the subsections in llm_output_data
-                    subsections = list(llm_output_data.keys())
-                    if not subsections:
-                        st.warning("No annotation sections found in the data")
-                    else:
-                        # Create tabs dynamically
-                        annotation_tabs = st.tabs([section.replace('_', ' ').title() for section in subsections])
-                        
-                        # Dictionary to store updates for each section
-                        updated_sections = {}
-                        
-                        # Render each section in its corresponding tab
-                        for tab, section in zip(annotation_tabs, subsections):
-                            with tab:
-                                st.markdown(f'<div class="section-header">{section.replace("_", " ").title()}</div>', 
-                                          unsafe_allow_html=True)
-                                updated_sections[section] = render_field(section, llm_output_data.get(section, {}), is_subsection=True)
+                        # Dynamically create tabs based on the subsections in llm_output_data
+                        subsections = list(llm_output_data.keys())
+                        if not subsections:
+                            st.warning("No annotation sections found in the data")
+                        else:
+                            # Create tabs dynamically
+                            annotation_tabs = st.tabs([section.replace('_', ' ').title() for section in subsections])
+                            
+                            # Dictionary to store updates for each section
+                            updated_sections = {}
+                            
+                            # Render each section in its corresponding tab
+                            for tab, section in zip(annotation_tabs, subsections):
+                                with tab:
+                                    st.markdown(f'<div class="section-header">{section.replace("_", " ").title()}</div>', 
+                                              unsafe_allow_html=True)
+                                    updated_sections[section] = render_field(section, llm_output_data.get(section, {}), is_subsection=True)
+                            
+                            # Add separator before total feedback
+                            st.markdown("<hr style='margin: 30px 0; border: none; border-top: 1px solid rgba(100, 181, 246, 0.2);'>", unsafe_allow_html=True)
+                            
+                            # Add total feedback section
+                            st.markdown(
+                                """
+                                <div style="margin: 20px 0;">
+                                    <div style="color: #64B5F6; font-size: 1.1em; font-weight: 500; margin-bottom: 10px;">
+                                        📝 Total Feedback
+                                    </div>
+                                    <div style="color: #A4B5C6; font-size: 0.9em; margin-bottom: 15px;">
+                                        Add any overall feedback, comments, or observations about this annotation.
+                                    </div>
+                                </div>
+                                """,
+                                unsafe_allow_html=True
+                            )
+                            
+                            total_feedback = st.text_area(
+                                "",
+                                key="total_feedback",
+                                placeholder="Enter your overall feedback here...",
+                                height=150,
+                                label_visibility="collapsed"
+                            )
+                            
+                            # Add total feedback to updated sections
+                            updated_sections["total_feedback"] = total_feedback
 
                         submitted = st.form_submit_button("Submit")
                         if submitted:
@@ -834,48 +1032,108 @@ def main():
                                 st.rerun()
                         else:
                             st.session_state["form_submitted"] = False
-                st.markdown('</div>', unsafe_allow_html=True)
-        else:
-            st.warning("No data found for the selected filters.")
+                    st.markdown('</div>', unsafe_allow_html=True)
+            else:
+                st.warning("No data found for the selected filters.")
 
-    with tabs[1]:
-        st.subheader("View Submitted Annotations")
-        # View annotations tab content
-        if not annotations_df.empty and 'llm_output' in annotations_df.columns and 'annotated_output' in annotations_df.columns:
-            # Filter out rows where annotated_output is None or same as llm_output
-            view_df = annotations_df[
-                (annotations_df['annotated_output'].notna()) & 
-                (annotations_df['llm_output'] != annotations_df['annotated_output'])
-            ]
+        with tabs[1]:
+            st.subheader("View Submitted Annotations")
             
-            if not view_df.empty:
-                # Add filters
-                col1, col2 = st.columns(2)
+            # Calculate status counts
+            total_annotations = len(annotations_df)
+            completed = len(annotations_df[annotations_df['status'] == 'Completed'])
+            in_progress = len(annotations_df[annotations_df['status'] == 'In Progress'])
+            not_started = len(annotations_df[annotations_df['status'] == 'Not Started'])
+            
+            completion_percentage = (completed / total_annotations * 100) if total_annotations > 0 else 0
+            
+            # Add horizontal progress section
+            st.markdown(
+                f"""
+                <div class="horizontal-progress-container">
+                    <div class="progress-header">
+                        <span style="font-size: 1.2em;">📊</span>
+                        <div>
+                            <div style="color: #64B5F6; font-weight: 500;">Annotation Progress</div>
+                            <div style="font-size: 0.8em; color: #A4B5C6; margin-top: 4px;">
+                                {completion_percentage:.1f}% Complete
+                            </div>
+                        </div>
+                    </div>
+                    <div class="progress-stats">
+                        <div class="horizontal-status-badge status-completed">
+                            <span style="min-width: 24px; text-align: right;">{completed}</span>
+                            <span>Completed</span>
+                        </div>
+                        <div class="horizontal-status-badge status-in-progress">
+                            <span style="min-width: 24px; text-align: right;">{in_progress}</span>
+                            <span>In Progress</span>
+                        </div>
+                        <div class="horizontal-status-badge status-not-started">
+                            <span style="min-width: 24px; text-align: right;">{not_started}</span>
+                            <span>Not Started</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="horizontal-progress-bar">
+                    <div class="status-progress-bar" style="width: {completion_percentage}%;"></div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+            
+            # View annotations tab content
+            if not annotations_df.empty:
+                # Add filters with unique keys
+                col1, col2, col3 = st.columns(3)
                 with col1:
                     view_annotator = st.selectbox(
                         "Filter by Annotator",
-                        options=['All'] + sorted(view_df['annotator'].unique().tolist())
+                        options=['All'] + sorted(annotations_df['annotator'].unique().tolist()),
+                        key='view_annotator_select'
                     )
                 with col2:
                     view_interaction = st.selectbox(
                         "Filter by Interaction ID",
-                        options=['All'] + sorted(view_df['interaction_id'].unique().tolist())
+                        options=['All'] + sorted(annotations_df['interaction_id'].unique().tolist()),
+                        key='view_interaction_select'
+                    )
+                with col3:
+                    view_status = st.selectbox(
+                        "Filter by Status",
+                        options=['All', 'Not Started', 'In Progress', 'Completed'],
+                        key='view_status_select'
                     )
                 
                 # Apply filters
+                view_df = annotations_df.copy()
                 if view_annotator != 'All':
                     view_df = view_df[view_df['annotator'] == view_annotator]
                 if view_interaction != 'All':
                     view_df = view_df[view_df['interaction_id'] == view_interaction]
+                if view_status != 'All':
+                    view_df = view_df[view_df['status'] == view_status]
                 
-                # Display annotations
+                # Display annotations with status
                 if not view_df.empty:
                     for _, row in view_df.iterrows():
+                        status_class = f"status-{row.get('status', 'Not Started').lower().replace(' ', '-')}"
                         with st.expander(
                             f"Interaction: {row['interaction_id']} - "
                             f"Annotator: {row['annotator']} - "
+                            f"Status: {row.get('status', 'Not Started')} - "
                             f"Last Updated: {row.get('last_updated', 'Not updated')}"
                         ):
+                            # Display status badge
+                            st.markdown(
+                                f"""
+                                <div class="status-badge {status_class}">
+                                    {row.get('status', 'Not Started')}
+                                </div>
+                                """,
+                                unsafe_allow_html=True
+                            )
+                            
                             col1, col2 = st.columns(2)
                             with col1:
                                 st.markdown("#### Original LLM Output")
@@ -889,163 +1147,165 @@ def main():
                 else:
                     st.info("No annotations found with selected filters.")
             else:
-                st.info("No submitted annotations found.")
-        else:
-            st.info("No annotations available yet.")
+                st.info("No annotations available yet.")
 
-    with tabs[2]:
-        st.markdown("""
-        # 📋 Annotation Guidelines
-        
-        ## Overview
-        This comprehensive guide outlines the standards and procedures for annotating call transcripts. Follow these guidelines carefully to ensure consistency and accuracy across all annotations.
-        
-        ## General Principles
-        1. **Accuracy First**: Always verify information before marking it as correct
-        2. **Consistency**: Use the same standards across all annotations
-        3. **Documentation**: Provide clear remarks for any incorrect or missing information
-        4. **Context Matters**: Consider the full conversation context when annotating
-        5. **Objectivity**: Base annotations solely on transcript content, not assumptions
-        
-        ## Validation Controls
-        - **❌ Incorrect Marker**: Use when information is present but incorrect
-        - **⚠️ Missing Marker**: Use when required information is not present
-        - **Remarks Field**: Required when marking items as incorrect or missing
-        
-        ## Section-Specific Guidelines
-        
-        ### 1. Call Details
-        #### Required Fields:
-        - **Call ID**: Must match the format (e.g., "12345")
-        - **Call Date**: Must be in YYYY-MM-DD format
-        - **Call Type**: Must match predefined categories
-        
-        #### Common Scenarios:
-        - 🔍 **Incorrect Format**: Mark as incorrect if ID format doesn't match
-        - 🔍 **Future Dates**: Mark as incorrect if date is in the future
-        - 🔍 **Invalid Call Type**: Mark as incorrect if not in approved list
-        
-        ### 2. Client Profile
-        #### Required Fields:
-        - **Client Age**: Must be between 18-100
-        - **Current Balance**: Must be numeric and non-negative
-        - **Years to Retirement**: Must be positive integer
-        
-        #### Common Scenarios:
-        - 🔍 **Age Discrepancy**: Mark if age conflicts with other information
-        - 🔍 **Balance Format**: Mark if balance includes non-numeric characters
-        - 🔍 **Retirement Timeline**: Mark if conflicts with age/goals
-        
-        ### 3. Retirement Goals
-        #### Required Fields:
-        - **Goal Flag**: Must be boolean
-        - **Goal List**: Must contain valid retirement goals
-        - **Target Age**: Must be greater than current age
-        
-        #### Common Scenarios:
-        - 🔍 **Implicit Goals**: Only mark goals explicitly mentioned
-        - 🔍 **Conflicting Goals**: Note contradictions in remarks
-        - 🔍 **Unrealistic Timeline**: Flag if retirement age is unrealistic
-        
-        ## Quality Control Checklist
-        
-        ### Before Annotation:
-        1. ✓ Read entire transcript thoroughly
-        2. ✓ Note key information while reading
-        3. ✓ Identify potential inconsistencies
-        
-        ### During Annotation:
-        1. ✓ Cross-reference information across sections
-        2. ✓ Verify numerical values
-        3. ✓ Check for logical consistency
-        4. ✓ Document all assumptions
-        
-        ### After Annotation:
-        1. ✓ Review all marked items
-        2. ✓ Verify all remarks are clear and specific
-        3. ✓ Check for missing required fields
-        4. ✓ Ensure consistency across sections
-        
-        ## Common Pitfalls to Avoid
-        
-        ### 1. Assumption Errors
-        - ❌ Don't assume information not explicitly stated
-        - ❌ Don't infer demographics without evidence
-        - ❌ Don't extrapolate beyond given data
-        
-        ### 2. Validation Errors
-        - ❌ Don't mark correct information as incorrect
-        - ❌ Don't leave remarks empty for marked items
-        - ❌ Don't ignore format requirements
-        
-        ### 3. Consistency Errors
-        - ❌ Don't use different standards across calls
-        - ❌ Don't ignore conflicts between sections
-        - ❌ Don't skip validation steps
-        
-        ## Special Cases
-        
-        ### 1. Ambiguous Information
-        - 📝 Document uncertainty in remarks
-        - 📝 Note multiple possible interpretations
-        - 📝 Flag for review if critically ambiguous
-        
-        ### 2. Missing Context
-        - 📝 Mark information as missing
-        - 📝 Note specific missing context
-        - 📝 Don't make assumptions to fill gaps
-        
-        ### 3. Conflicting Information
-        - 📝 Document all conflicts
-        - 📝 Note which source seems more reliable
-        - 📝 Flag for review if unresolvable
-        
-        ## Best Practices for Remarks
-        
-        ### 1. Writing Clear Remarks
-        - ✍️ Be specific and concise
-        - ✍️ Reference relevant transcript portions
-        - ✍️ Use standard terminology
-        
-        ### 2. Documenting Issues
-        - ✍️ State the specific problem
-        - ✍️ Provide evidence from transcript
-        - ✍️ Suggest correct information if known
-        
-        ### 3. Handling Uncertainty
-        - ✍️ Note degree of uncertainty
-        - ✍️ List alternative interpretations
-        - ✍️ Explain impact on annotation
-        
-        ## Review Process
-        
-        ### 1. Self-Review
-        1. 🔍 Review all marked items
-        2. 🔍 Verify remark clarity
-        3. 🔍 Check for missed issues
-        
-        ### 2. Peer Review
-        1. 🔍 Another annotator reviews
-        2. 🔍 Compare interpretations
-        3. 🔍 Resolve disagreements
-        
-        ### 3. Final Validation
-        1. 🔍 Check all required fields
-        2. 🔍 Verify all marks have remarks
-        3. 🔍 Ensure consistency
-        
-        ## Support and Questions
-        
-        If you encounter situations not covered by these guidelines or have questions:
-        1. Consult with senior annotators
-        2. Document the scenario for future reference
-        3. Propose guideline updates if needed
-        
-        Remember: Quality annotations are crucial for improving our system. Take the time needed to ensure accuracy and completeness.
-        """)
+        with tabs[2]:
+            st.markdown("""
+            # 📋 Annotation Guidelines
+            
+            ## Overview
+            This comprehensive guide outlines the standards and procedures for annotating call transcripts. Follow these guidelines carefully to ensure consistency and accuracy across all annotations.
+            
+            ## General Principles
+            1. **Accuracy First**: Always verify information before marking it as correct
+            2. **Consistency**: Use the same standards across all annotations
+            3. **Documentation**: Provide clear remarks for any incorrect or missing information
+            4. **Context Matters**: Consider the full conversation context when annotating
+            5. **Objectivity**: Base annotations solely on transcript content, not assumptions
+            
+            ## Validation Controls
+            - **❌ Incorrect Marker**: Use when information is present but incorrect
+            - **⚠️ Missing Marker**: Use when required information is not present
+            - **Remarks Field**: Required when marking items as incorrect or missing
+            
+            ## Section-Specific Guidelines
+            
+            ### 1. Call Details
+            #### Required Fields:
+            - **Call ID**: Must match the format (e.g., "12345")
+            - **Call Date**: Must be in YYYY-MM-DD format
+            - **Call Type**: Must match predefined categories
+            
+            #### Common Scenarios:
+            - 🔍 **Incorrect Format**: Mark as incorrect if ID format doesn't match
+            - 🔍 **Future Dates**: Mark as incorrect if date is in the future
+            - 🔍 **Invalid Call Type**: Mark as incorrect if not in approved list
+            
+            ### 2. Client Profile
+            #### Required Fields:
+            - **Client Age**: Must be between 18-100
+            - **Current Balance**: Must be numeric and non-negative
+            - **Years to Retirement**: Must be positive integer
+            
+            #### Common Scenarios:
+            - 🔍 **Age Discrepancy**: Mark if age conflicts with other information
+            - 🔍 **Balance Format**: Mark if balance includes non-numeric characters
+            - 🔍 **Retirement Timeline**: Mark if conflicts with age/goals
+            
+            ### 3. Retirement Goals
+            #### Required Fields:
+            - **Goal Flag**: Must be boolean
+            - **Goal List**: Must contain valid retirement goals
+            - **Target Age**: Must be greater than current age
+            
+            #### Common Scenarios:
+            - 🔍 **Implicit Goals**: Only mark goals explicitly mentioned
+            - 🔍 **Conflicting Goals**: Note contradictions in remarks
+            - 🔍 **Unrealistic Timeline**: Flag if retirement age is unrealistic
+            
+            ## Quality Control Checklist
+            
+            ### Before Annotation:
+            1. ✓ Read entire transcript thoroughly
+            2. ✓ Note key information while reading
+            3. ✓ Identify potential inconsistencies
+            
+            ### During Annotation:
+            1. ✓ Cross-reference information across sections
+            2. ✓ Verify numerical values
+            3. ✓ Check for logical consistency
+            4. ✓ Document all assumptions
+            
+            ### After Annotation:
+            1. ✓ Review all marked items
+            2. ✓ Verify all remarks are clear and specific
+            3. ✓ Check for missing required fields
+            4. ✓ Ensure consistency across sections
+            
+            ## Common Pitfalls to Avoid
+            
+            ### 1. Assumption Errors
+            - ❌ Don't assume information not explicitly stated
+            - ❌ Don't infer demographics without evidence
+            - ❌ Don't extrapolate beyond given data
+            
+            ### 2. Validation Errors
+            - ❌ Don't mark correct information as incorrect
+            - ❌ Don't leave remarks empty for marked items
+            - ❌ Don't ignore format requirements
+            
+            ### 3. Consistency Errors
+            - ❌ Don't use different standards across calls
+            - ❌ Don't ignore conflicts between sections
+            - ❌ Don't skip validation steps
+            
+            ## Special Cases
+            
+            ### 1. Ambiguous Information
+            - 📝 Document uncertainty in remarks
+            - 📝 Note multiple possible interpretations
+            - 📝 Flag for review if critically ambiguous
+            
+            ### 2. Missing Context
+            - 📝 Mark information as missing
+            - 📝 Note specific missing context
+            - 📝 Don't make assumptions to fill gaps
+            
+            ### 3. Conflicting Information
+            - 📝 Document all conflicts
+            - 📝 Note which source seems more reliable
+            - 📝 Flag for review if unresolvable
+            
+            ## Best Practices for Remarks
+            
+            ### 1. Writing Clear Remarks
+            - ✍️ Be specific and concise
+            - ✍️ Reference relevant transcript portions
+            - ✍️ Use standard terminology
+            
+            ### 2. Documenting Issues
+            - ✍️ State the specific problem
+            - ✍️ Provide evidence from transcript
+            - ✍️ Suggest correct information if known
+            
+            ### 3. Handling Uncertainty
+            - ✍️ Note degree of uncertainty
+            - ✍️ List alternative interpretations
+            - ✍️ Explain impact on annotation
+            
+            ## Review Process
+            
+            ### 1. Self-Review
+            1. 🔍 Review all marked items
+            2. 🔍 Verify remark clarity
+            3. 🔍 Check for missed issues
+            
+            ### 2. Peer Review
+            1. 🔍 Another annotator reviews
+            2. 🔍 Compare interpretations
+            3. 🔍 Resolve disagreements
+            
+            ### 3. Final Validation
+            1. 🔍 Check all required fields
+            2. 🔍 Verify all marks have remarks
+            3. 🔍 Ensure consistency
+            
+            ## Support and Questions
+            
+            If you encounter situations not covered by these guidelines or have questions:
+            1. Consult with senior annotators
+            2. Document the scenario for future reference
+            3. Propose guideline updates if needed
+            
+            Remember: Quality annotations are crucial for improving our system. Take the time needed to ensure accuracy and completeness.
+            """)
 
-    with tabs[3]:
-        chat_interface()
+        with tabs[3]:
+            chat_interface()
+
+    except Exception as e:
+        st.error(f"Error loading data: {str(e)}")
+        return
 
 def render_field(key, value, parent_key="", is_subsection=False):
     """Enhanced render_field function with validation controls"""
