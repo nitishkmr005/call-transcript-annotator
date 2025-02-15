@@ -39,14 +39,6 @@ def add_custom_css():
             border: 1px solid rgba(100, 181, 246, 0.2);
         }
         
-        /* Sticky Tabs */
-        .stTabs {
-            position: sticky !important;
-            top: 0;
-            z-index: 998;
-            background: transparent;
-        }
-        
         /* Tab List Styling */
         .stTabs [data-baseweb="tab-list"] {
             position: sticky !important;
@@ -230,26 +222,6 @@ def add_custom_css():
             background: rgba(10, 25, 47, 0.7) !important;
             border: 1px solid rgba(100, 181, 246, 0.2) !important;
             border-radius: 8px !important;
-        }
-        
-        /* Scrollbar Styling */
-        ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-        
-        ::-webkit-scrollbar-track {
-            background: rgba(26, 41, 66, 0.3);
-            border-radius: 4px;
-        }
-        
-        ::-webkit-scrollbar-thumb {
-            background: rgba(100, 181, 246, 0.3);
-            border-radius: 4px;
-        }
-        
-        ::-webkit-scrollbar-thumb:hover {
-            background: rgba(100, 181, 246, 0.5);
         }
         
         /* Remove black highlight */
@@ -1008,7 +980,7 @@ def main():
                     annotations_df.at[row_index, 'status'] = new_status
                     annotations_df.at[row_index, 'last_updated'] = pd.Timestamp.now()
                     st.session_state.df = annotations_df
-                    st.experimental_rerun()
+                    st.rerun()
                 except Exception as e:
                     st.error(f"Error updating status: {str(e)}")
         
@@ -1033,7 +1005,11 @@ def main():
                 
                 with col2:
                     st.markdown('<div class="subheader">Call Annotation</div>', unsafe_allow_html=True)
-                    with st.form("annotation_form"):
+                    
+                    # Create a container for annotations
+                    annotation_container = st.container()
+                    
+                    with annotation_container:
                         try:
                             llm_output_data = json.loads(row_df['llm_output'])
                         except json.JSONDecodeError:
@@ -1082,6 +1058,14 @@ def main():
                                 key="call_quality",
                                 label_visibility="collapsed"
                             )
+                            if call_quality in ["Poor", "Below Average"]:
+                                call_quality_feedback = st.text_area(
+                                    "Please provide details about the call quality issues:",
+                                    key="call_quality_feedback",
+                                    height=100,
+                                    placeholder="Explain what aspects of the call quality need improvement..."
+                                )
+                                updated_sections["call_quality_feedback"] = call_quality_feedback
                             st.markdown('</div>', unsafe_allow_html=True)
                             
                             # Question 2: Agent Performance
@@ -1094,6 +1078,14 @@ def main():
                                 key="agent_performance",
                                 label_visibility="collapsed"
                             )
+                            if agent_performance in ["Needs Improvement", "Unsatisfactory"]:
+                                agent_feedback = st.text_area(
+                                    "Please provide details about the agent's performance issues:",
+                                    key="agent_feedback",
+                                    height=100,
+                                    placeholder="Explain what aspects of the agent's performance need improvement..."
+                                )
+                                updated_sections["agent_feedback"] = agent_feedback
                             st.markdown('</div>', unsafe_allow_html=True)
                             
                             # Question 3: Customer Satisfaction
@@ -1106,6 +1098,14 @@ def main():
                                 key="customer_satisfaction",
                                 label_visibility="collapsed"
                             )
+                            if customer_satisfaction in ["Dissatisfied", "Very Dissatisfied"]:
+                                satisfaction_feedback = st.text_area(
+                                    "Please provide details about the customer satisfaction issues:",
+                                    key="satisfaction_feedback",
+                                    height=100,
+                                    placeholder="Explain what aspects led to customer dissatisfaction..."
+                                )
+                                updated_sections["satisfaction_feedback"] = satisfaction_feedback
                             st.markdown('</div>', unsafe_allow_html=True)
                             
                             # Question 4: Resolution Effectiveness
@@ -1118,59 +1118,42 @@ def main():
                                 key="resolution_effectiveness",
                                 label_visibility="collapsed"
                             )
+                            if resolution_effectiveness in ["Minimally Resolved", "Not Resolved", "Partially Resolved"]:
+                                resolution_feedback = st.text_area(
+                                    "Please provide details about the resolution issues:",
+                                    key="resolution_feedback",
+                                    height=100,
+                                    placeholder="Explain what aspects of the resolution were inadequate..."
+                                )
+                                updated_sections["resolution_feedback"] = resolution_feedback
                             st.markdown('</div>', unsafe_allow_html=True)
                             
-                            # Add separator before total feedback
-                            st.markdown("<hr style='margin: 30px 0; border: none; border-top: 1px solid rgba(100, 181, 246, 0.2);'>", unsafe_allow_html=True)
+                            # Add the feedback ratings to updated_sections
+                            updated_sections.update({
+                                "call_quality_rating": call_quality,
+                                "agent_performance_rating": agent_performance,
+                                "customer_satisfaction_rating": customer_satisfaction,
+                                "resolution_effectiveness_rating": resolution_effectiveness
+                            })
                             
-                            # Add total feedback section
-                            st.markdown(
-                                """
-                                <div style="margin: 20px 0;">
-                                    <div style="color: #64B5F6; font-size: 1.1em; font-weight: 500; margin-bottom: 10px;">
-                                        📝 Total Feedback
-                                    </div>
-                                    <div style="color: #A4B5C6; font-size: 0.9em; margin-bottom: 15px;">
-                                        Add any overall feedback, comments, or observations about this annotation.
-                                    </div>
-                                </div>
-                                """,
-                                unsafe_allow_html=True
-                            )
-                            
-                            total_feedback = st.text_area(
-                                "",
-                                key="total_feedback",
-                                placeholder="Enter your overall feedback here...",
-                                height=150,
-                                label_visibility="collapsed"
-                            )
-                            
-                            # Add total feedback to updated sections
-                            updated_sections["total_feedback"] = total_feedback
-
-                        submitted = st.form_submit_button("Submit")
-                        if submitted:
-                            st.session_state["form_submitted"] = True
-                            try:
-                                row_index = row_df.name
-                                current_df = pd.read_parquet("annotations.parquet")
-                                current_df.at[row_index, 'annotated_output'] = json.dumps(updated_sections, indent=2)
-                                current_df.at[row_index, 'last_updated'] = pd.Timestamp.now()
-                                current_df.to_parquet("annotations.parquet", index=False)
-                                st.session_state.df = current_df
-                                st.session_state["show_flash"] = True
-                                st.session_state["flash_message"] = "Annotations saved successfully!"
-                                st.session_state["flash_type"] = "success"
-                                st.rerun()
-                            except Exception as e:
-                                st.session_state["show_flash"] = True
-                                st.session_state["flash_message"] = f"Error saving annotation: {str(e)}"
-                                st.session_state["flash_type"] = "error"
-                                st.rerun()
-                        else:
-                            st.session_state["form_submitted"] = False
-                    st.markdown('</div>', unsafe_allow_html=True)
+                            # Add Save button at the bottom
+                            if st.button("Save Annotations", key="save_annotations"):
+                                try:
+                                    row_index = row_df.name
+                                    current_df = pd.read_parquet("annotations.parquet")
+                                    current_df.at[row_index, 'annotated_output'] = json.dumps(updated_sections, indent=2)
+                                    current_df.at[row_index, 'last_updated'] = pd.Timestamp.now()
+                                    current_df.to_parquet("annotations.parquet", index=False)
+                                    st.session_state.df = current_df
+                                    st.session_state["show_flash"] = True
+                                    st.session_state["flash_message"] = "Annotations saved successfully!"
+                                    st.session_state["flash_type"] = "success"
+                                    st.rerun()
+                                except Exception as e:
+                                    st.session_state["show_flash"] = True
+                                    st.session_state["flash_message"] = f"Error saving annotation: {str(e)}"
+                                    st.session_state["flash_type"] = "error"
+                                    st.rerun()
             else:
                 st.warning("No data found for the selected filters.")
 
