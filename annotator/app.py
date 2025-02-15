@@ -192,21 +192,89 @@ def add_custom_css():
             box-shadow: 0 0 10px rgba(100, 181, 246, 0.3) !important;
         }
         
-        /* Submit Button */
-        .stButton button {
-            background: linear-gradient(135deg, #64B5F6, #2196F3) !important;
+        /* Enhanced Button Styling */
+        .stButton > button {
+            width: 100%;
+            background: linear-gradient(135deg, #64B5F6, #1976D2) !important;
             color: white !important;
-            border: none !important;
-            padding: 12px 30px !important;
-            border-radius: 8px !important;
+            padding: 15px 30px !important;
+            font-size: 1.1em !important;
             font-weight: 500 !important;
+            border: none !important;
+            border-radius: 12px !important;
+            cursor: pointer !important;
             transition: all 0.3s ease !important;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1) !important;
+            box-shadow: 0 4px 15px rgba(25, 118, 210, 0.2) !important;
+            margin-top: 20px !important;
+            backdrop-filter: blur(10px);
+            position: relative;
+            overflow: hidden;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            gap: 10px !important;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border: 1px solid rgba(100, 181, 246, 0.2) !important;
         }
-        
-        .stButton button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 8px rgba(0, 0, 0, 0.2) !important;
+
+        .stButton > button:hover {
+            transform: translateY(-2px) !important;
+            box-shadow: 0 8px 25px rgba(25, 118, 210, 0.3) !important;
+            background: linear-gradient(135deg, #82c4f8, #1976D2) !important;
+            border-color: rgba(100, 181, 246, 0.4) !important;
+        }
+
+        .stButton > button:active {
+            transform: translateY(1px) !important;
+            box-shadow: 0 4px 15px rgba(25, 118, 210, 0.2) !important;
+        }
+
+        .stButton > button::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(
+                120deg,
+                transparent,
+                rgba(255, 255, 255, 0.2),
+                transparent
+            );
+            transition: all 0.6s ease;
+        }
+
+        .stButton > button:hover::before {
+            left: 100%;
+        }
+
+        /* Save Button Container */
+        .save-button-container {
+            background: rgba(26, 41, 66, 0.7);
+            padding: 25px;
+            border-radius: 15px;
+            border: 1px solid rgba(100, 181, 246, 0.2);
+            margin-top: 40px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Button Icon Animation */
+        .stButton > button svg,
+        .stButton > button img {
+            transition: transform 0.3s ease;
+        }
+
+        .stButton > button:hover svg,
+        .stButton > button:hover img {
+            transform: scale(1.1);
+        }
+
+        /* Button Text Shadow */
+        .stButton > button span {
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
         
         /* Timestamp Styling */
@@ -507,6 +575,78 @@ def add_custom_css():
             border-bottom: none;
             padding-bottom: 0;
             margin-bottom: 0;
+        }
+
+        /* Main content area */
+        .main .block-container {
+            padding: 1rem !important;
+            max-width: 100%;
+        }
+
+        /* Status Update Dropdown Styling */
+        [data-testid="stSelectbox"] {
+            margin-top: 10px;
+        }
+
+        [data-testid="stSelectbox"] > div > div {
+            background: rgba(26, 41, 66, 0.7) !important;
+            border: 1px solid rgba(100, 181, 246, 0.2) !important;
+            border-radius: 8px !important;
+            color: #64B5F6 !important;
+            min-height: 45px;
+        }
+
+        [data-testid="stSelectbox"] > div > div:hover {
+            border-color: #64B5F6 !important;
+            box-shadow: 0 0 0 1px rgba(100, 181, 246, 0.3) !important;
+        }
+
+        [data-testid="stSelectbox"] > div > div > div {
+            color: #64B5F6 !important;
+        }
+
+        /* Dropdown options styling */
+        [data-testid="stSelectbox"] ul {
+            background-color: rgba(26, 41, 66, 0.95) !important;
+            border: 1px solid rgba(100, 181, 246, 0.2) !important;
+            border-radius: 8px !important;
+            backdrop-filter: blur(10px);
+        }
+
+        [data-testid="stSelectbox"] ul li {
+            background-color: transparent !important;
+            color: #A4B5C6 !important;
+            transition: all 0.2s ease;
+        }
+
+        [data-testid="stSelectbox"] ul li:hover {
+            background-color: rgba(100, 181, 246, 0.1) !important;
+            color: #64B5F6 !important;
+        }
+
+        [data-testid="stSelectbox"] ul li[aria-selected="true"] {
+            background-color: rgba(100, 181, 246, 0.2) !important;
+            color: #64B5F6 !important;
+        }
+
+        /* Status Update Label */
+        .sidebar-status-update {
+            color: #64B5F6;
+            font-size: 0.9em;
+            font-weight: 500;
+            margin: 20px 0 5px 0;
+            padding: 0;
+            opacity: 0.9;
+        }
+
+        /* Status Container */
+        .status-update-container {
+            background: rgba(26, 41, 66, 0.7);
+            border: 1px solid rgba(100, 181, 246, 0.2);
+            border-radius: 12px;
+            padding: 15px;
+            margin: 10px 0;
+            backdrop-filter: blur(10px);
         }
         </style>
         """,
@@ -955,7 +1095,7 @@ def main():
             # Add status selector in sidebar with unique key
             st.sidebar.markdown(
                 f"""
-                <div class="sidebar-status-container">
+                <div class="status-update-container">
                     <div class="sidebar-status-header">Current Annotation Status</div>
                     <div class="status-badge status-{current_status.lower().replace(' ', '-')}">
                         {current_status}
@@ -965,12 +1105,14 @@ def main():
                 unsafe_allow_html=True
             )
             
+            st.sidebar.markdown('<div class="sidebar-status-update">Update Status</div>', unsafe_allow_html=True)
             # Status selector in sidebar with unique key
             new_status = st.sidebar.selectbox(
-                "Update Status",
+                "",
                 options=["Not Started", "In Progress", "Completed"],
                 index=["Not Started", "In Progress", "Completed"].index(current_status),
-                key='sidebar_status_select'
+                key='sidebar_status_select',
+                label_visibility="collapsed"
             )
             
             # Update status if changed
@@ -1007,7 +1149,7 @@ def main():
                     st.markdown('<div class="subheader">Call Annotation</div>', unsafe_allow_html=True)
                     
                     # Create a container for annotations
-                    annotation_container = st.container()
+                    annotation_container = st.container(border=True)
                     
                     with annotation_container:
                         try:
@@ -1136,24 +1278,60 @@ def main():
                                 "resolution_effectiveness_rating": resolution_effectiveness
                             })
                             
-                            # Add Save button at the bottom
-                            if st.button("Save Annotations", key="save_annotations"):
-                                try:
-                                    row_index = row_df.name
-                                    current_df = pd.read_parquet("annotations.parquet")
-                                    current_df.at[row_index, 'annotated_output'] = json.dumps(updated_sections, indent=2)
-                                    current_df.at[row_index, 'last_updated'] = pd.Timestamp.now()
-                                    current_df.to_parquet("annotations.parquet", index=False)
-                                    st.session_state.df = current_df
-                                    st.session_state["show_flash"] = True
-                                    st.session_state["flash_message"] = "Annotations saved successfully!"
-                                    st.session_state["flash_type"] = "success"
-                                    st.rerun()
-                                except Exception as e:
-                                    st.session_state["show_flash"] = True
-                                    st.session_state["flash_message"] = f"Error saving annotation: {str(e)}"
-                                    st.session_state["flash_type"] = "error"
-                                    st.rerun()
+                            # Add Save button with enhanced styling
+                            st.markdown(
+                                """
+                                <div class="save-button-container">
+                                    <div style="text-align: center;">
+                                        <div style="color: #64B5F6; font-size: 1.1em; font-weight: 500; margin-bottom: 8px;">
+                                            Ready to Submit?
+                                        </div>
+                                        <div style="color: #A4B5C6; font-size: 0.9em; margin-bottom: 20px;">
+                                            Save your annotations to submit them for review
+                                        </div>
+                                    </div>
+                                </div>
+                                """, 
+                                unsafe_allow_html=True
+                            )
+                            
+                            col1, col2, col3 = st.columns([1, 2, 1])
+                            with col2:
+                                if st.button(
+                                    "💾  Save Annotations  ✨",
+                                    key="save_annotations",
+                                    type="primary",
+                                    use_container_width=True,
+                                ):
+                                    try:
+                                        row_index = row_df.name
+                                        current_df = pd.read_parquet("annotations.parquet")
+                                        current_df.at[row_index, 'annotated_output'] = json.dumps(updated_sections, indent=2)
+                                        current_df.at[row_index, 'last_updated'] = pd.Timestamp.now()
+                                        current_df.to_parquet("annotations.parquet", index=False)
+                                        st.session_state.df = current_df
+                                        
+                                        # Show success message with animation
+                                        st.markdown(
+                                            """
+                                            <div class="flash-message flash-success">
+                                                ✅ Annotations saved successfully!
+                                            </div>
+                                            """,
+                                            unsafe_allow_html=True
+                                        )
+                                        st.experimental_rerun()
+                                    except Exception as e:
+                                        # Show error message with animation
+                                        st.markdown(
+                                            f"""
+                                            <div class="flash-message flash-error">
+                                                ❌ Error saving annotation: {str(e)}
+                                            </div>
+                                            """,
+                                            unsafe_allow_html=True
+                                        )
+                                        st.experimental_rerun()
             else:
                 st.warning("No data found for the selected filters.")
 
