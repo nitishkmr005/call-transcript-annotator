@@ -461,6 +461,81 @@ def add_custom_css():
             margin-top: 10px;
             width: 100%;
         }
+        
+        /* Feedback Questions Container */
+        .feedback-questions {
+            background: rgba(26, 41, 66, 0.7);
+            border: 1px solid rgba(100, 181, 246, 0.2);
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        /* Radio Button Container */
+        .stRadio > div {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            background: rgba(26, 41, 66, 0.4);
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid rgba(100, 181, 246, 0.1);
+        }
+        
+        /* Individual Radio Option */
+        .stRadio [role="radio"] {
+            background: rgba(26, 41, 66, 0.7) !important;
+            border: 1px solid rgba(100, 181, 246, 0.2) !important;
+            padding: 12px 20px !important;
+            border-radius: 8px !important;
+            transition: all 0.3s ease;
+            color: #A4B5C6 !important;
+        }
+        
+        /* Radio Option Hover */
+        .stRadio [role="radio"]:hover {
+            background: rgba(100, 181, 246, 0.1) !important;
+            transform: translateX(5px);
+        }
+        
+        /* Selected Radio Option */
+        .stRadio [role="radio"][data-checked="true"] {
+            background: rgba(100, 181, 246, 0.2) !important;
+            border-color: #64B5F6 !important;
+            color: #64B5F6 !important;
+            transform: translateX(5px);
+            box-shadow: 0 0 15px rgba(100, 181, 246, 0.1);
+        }
+        
+        /* Question Label */
+        .feedback-question-label {
+            color: #64B5F6;
+            font-size: 1em;
+            font-weight: 500;
+            margin-bottom: 10px;
+            display: block;
+        }
+        
+        /* Question Description */
+        .feedback-question-desc {
+            color: #A4B5C6;
+            font-size: 0.9em;
+            margin-bottom: 15px;
+            display: block;
+        }
+        
+        /* Question Group */
+        .feedback-question-group {
+            margin-bottom: 25px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid rgba(100, 181, 246, 0.1);
+        }
+        
+        .feedback-question-group:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+            margin-bottom: 0;
+        }
         </style>
         """,
         unsafe_allow_html=True
@@ -981,6 +1056,69 @@ def main():
                                     st.markdown(f'<div class="section-header">{section.replace("_", " ").title()}</div>', 
                                               unsafe_allow_html=True)
                                     updated_sections[section] = render_field(section, llm_output_data.get(section, {}), is_subsection=True)
+                            
+                            # Add feedback questions section
+                            st.markdown(
+                                """
+                                <div style="margin: 30px 0;">
+                                    <div style="color: #64B5F6; font-size: 1.2em; font-weight: 500; margin-bottom: 15px;">
+                                        ⭐ Feedback Questions
+                                    </div>
+                                    <div style="color: #A4B5C6; font-size: 0.9em; margin-bottom: 20px;">
+                                        Please rate the following aspects of the conversation.
+                                    </div>
+                                </div>
+                                """,
+                                unsafe_allow_html=True
+                            )
+                            
+                            # Question 1: Call Quality
+                            st.markdown('<div class="feedback-question-group">', unsafe_allow_html=True)
+                            st.markdown('<label class="feedback-question-label">1. Overall Call Quality</label>', unsafe_allow_html=True)
+                            st.markdown('<span class="feedback-question-desc">How would you rate the overall quality of the call interaction?</span>', unsafe_allow_html=True)
+                            call_quality = st.radio(
+                                "",
+                                options=["Excellent", "Good", "Average", "Below Average", "Poor"],
+                                key="call_quality",
+                                label_visibility="collapsed"
+                            )
+                            st.markdown('</div>', unsafe_allow_html=True)
+                            
+                            # Question 2: Agent Performance
+                            st.markdown('<div class="feedback-question-group">', unsafe_allow_html=True)
+                            st.markdown('<label class="feedback-question-label">2. Agent Performance</label>', unsafe_allow_html=True)
+                            st.markdown('<span class="feedback-question-desc">How effectively did the agent handle the customer\'s needs?</span>', unsafe_allow_html=True)
+                            agent_performance = st.radio(
+                                "",
+                                options=["Exceptional", "Above Average", "Satisfactory", "Needs Improvement", "Unsatisfactory"],
+                                key="agent_performance",
+                                label_visibility="collapsed"
+                            )
+                            st.markdown('</div>', unsafe_allow_html=True)
+                            
+                            # Question 3: Customer Satisfaction
+                            st.markdown('<div class="feedback-question-group">', unsafe_allow_html=True)
+                            st.markdown('<label class="feedback-question-label">3. Customer Satisfaction</label>', unsafe_allow_html=True)
+                            st.markdown('<span class="feedback-question-desc">Based on the interaction, how satisfied do you think the customer was?</span>', unsafe_allow_html=True)
+                            customer_satisfaction = st.radio(
+                                "",
+                                options=["Very Satisfied", "Satisfied", "Neutral", "Dissatisfied", "Very Dissatisfied"],
+                                key="customer_satisfaction",
+                                label_visibility="collapsed"
+                            )
+                            st.markdown('</div>', unsafe_allow_html=True)
+                            
+                            # Question 4: Resolution Effectiveness
+                            st.markdown('<div class="feedback-question-group">', unsafe_allow_html=True)
+                            st.markdown('<label class="feedback-question-label">4. Resolution Effectiveness</label>', unsafe_allow_html=True)
+                            st.markdown('<span class="feedback-question-desc">How effectively was the customer\'s issue resolved?</span>', unsafe_allow_html=True)
+                            resolution_effectiveness = st.radio(
+                                "",
+                                options=["Completely Resolved", "Mostly Resolved", "Partially Resolved", "Minimally Resolved", "Not Resolved"],
+                                key="resolution_effectiveness",
+                                label_visibility="collapsed"
+                            )
+                            st.markdown('</div>', unsafe_allow_html=True)
                             
                             # Add separator before total feedback
                             st.markdown("<hr style='margin: 30px 0; border: none; border-top: 1px solid rgba(100, 181, 246, 0.2);'>", unsafe_allow_html=True)
