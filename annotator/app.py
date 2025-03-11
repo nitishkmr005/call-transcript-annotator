@@ -7,6 +7,7 @@ import base64
 import os
 from streamlit_chat import message
 import requests
+from collections import Counter
 # Set page configuration for wide layout
 st.set_page_config(layout="wide", page_title="Call Transcript Annotation Tool")
 
@@ -648,6 +649,154 @@ def add_custom_css():
             margin: 10px 0;
             backdrop-filter: blur(10px);
         }
+
+        /* Tooltip Styling */
+        .tooltip-container {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            margin-left: 4px;
+        }
+
+        .tooltip-container span {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2px;
+            border-radius: 50%;
+            background: rgba(100, 181, 246, 0.1);
+            transition: all 0.3s ease;
+            cursor: help;
+        }
+
+        .tooltip-container:hover span {
+            background: rgba(100, 181, 246, 0.2);
+            transform: scale(1.1);
+        }
+
+        .tooltip-container svg {
+            transition: all 0.3s ease;
+        }
+
+        .tooltip-container:hover svg {
+            transform: scale(1.1);
+        }
+
+        .tooltip-container:hover svg circle,
+        .tooltip-container:hover svg path {
+            stroke-opacity: 1;
+        }
+
+        /* Tooltip Text */
+        .tooltip-text {
+            visibility: hidden;
+            background: rgba(26, 41, 66, 0.98);
+            color: #fff;
+            text-align: left;
+            padding: 12px 16px;
+            border-radius: 8px;
+            border: 1px solid rgba(100, 181, 246, 0.2);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            
+            /* Position the tooltip */
+            position: absolute;
+            z-index: 1000;
+            bottom: 125%;
+            left: 50%;
+            transform: translateX(-50%);
+            
+            /* Size constraints */
+            min-width: 200px;
+            max-width: 300px;
+            
+            /* Fade in animation */
+            opacity: 0;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* Tooltip Arrow */
+        .tooltip-text::after {
+            content: "";
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -5px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: rgba(26, 41, 66, 0.98) transparent transparent transparent;
+        }
+
+        /* Show tooltip on hover */
+        .tooltip-container:hover .tooltip-text {
+            visibility: visible;
+            opacity: 1;
+            transform: translateX(-50%) translateY(-5px);
+        }
+
+        /* Tooltip Title */
+        .tooltip-title {
+            color: #64B5F6;
+            font-weight: 500;
+            margin-bottom: 6px;
+            font-size: 0.9em;
+        }
+
+        /* Tooltip Description */
+        .tooltip-description {
+            color: #A4B5C6;
+            font-size: 0.85em;
+            line-height: 1.5;
+        }
+
+        /* Nested Field Title Styling */
+        .nested-field-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 5px;
+        }
+
+        .nested-field-title .section-name {
+            color: #64B5F6;
+            font-size: 0.9em;
+            opacity: 0.8;
+        }
+
+        .nested-field-title .separator {
+            color: #64B5F6;
+            opacity: 0.5;
+            margin: 0 4px;
+        }
+
+        .nested-field-title .field-name {
+            color: #64B5F6;
+            font-size: 0.9em;
+        }
+
+        /* Update the field container styling */
+        .field-container {
+            background: rgba(26, 41, 66, 0.4);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 12px;
+            border: 1px solid rgba(100, 181, 246, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        .field-container:hover {
+            background: rgba(26, 41, 66, 0.5);
+            border-color: rgba(100, 181, 246, 0.2);
+        }
+
+        /* Update tooltip container for nested fields */
+        .nested-field .tooltip-container {
+            margin-left: 8px;
+        }
+
+        .nested-field .tooltip-text {
+            min-width: 250px;
+        }
         </style>
         """,
         unsafe_allow_html=True
@@ -1006,6 +1155,418 @@ def chat_interface():
     )
     st.markdown('</div>', unsafe_allow_html=True)
 
+def calculate_metrics(df):
+    """Calculate metrics from LLM and annotated outputs with sample data for visualization"""
+    # Sample data for visualization
+    metrics = {
+        'total_annotations': 150,
+        'completed_annotations': 120,
+        'accuracy_metrics': {
+            'overall_accuracy': 87.5,
+            'precision': 86.3,  # Added precision
+            'recall': 85.7,     # Added recall
+            'f1_score': 86.0,   # Added f1_score
+            'field_accuracy': 85.2,
+            'section_accuracy': 89.3,
+            'trend': [
+                {'date': '2024-03-01', 'accuracy': 82.5, 'precision': 81.2, 'recall': 80.8},
+                {'date': '2024-03-02', 'accuracy': 84.1, 'precision': 83.5, 'recall': 82.9},
+                {'date': '2024-03-03', 'accuracy': 85.7, 'precision': 84.8, 'recall': 84.2},
+                {'date': '2024-03-04', 'accuracy': 86.2, 'precision': 85.4, 'recall': 84.9},
+                {'date': '2024-03-05', 'accuracy': 87.5, 'precision': 86.3, 'recall': 85.7}
+            ]
+        },
+        'field_level_metrics': {
+            'call_details.call_id': {
+                'total_occurrences': 150,
+                'correct_count': 142,
+                'incorrect_count': 5,
+                'missing_count': 3,
+                'accuracy_rate': 94.7,
+                'precision': 93.8,
+                'recall': 92.5,
+                'common_errors': ['Invalid format', 'Duplicate ID', 'Missing prefix'],
+                'trend': [90.5, 92.1, 93.4, 94.7]
+            },
+            'client_profile.client_age': {
+                'total_occurrences': 150,
+                'correct_count': 138,
+                'incorrect_count': 8,
+                'missing_count': 4,
+                'accuracy_rate': 92.0,
+                'precision': 91.5,
+                'recall': 90.8,
+                'common_errors': ['Age mismatch', 'Invalid range', 'Typo in value'],
+                'trend': [88.2, 89.5, 90.8, 92.0]
+            },
+            'retirement_test.retirement_age': {
+                'total_occurrences': 150,
+                'correct_count': 135,
+                'incorrect_count': 10,
+                'missing_count': 5,
+                'accuracy_rate': 90.0,
+                'precision': 89.5,
+                'recall': 88.7,
+                'common_errors': ['Unrealistic age', 'Inconsistent with goals', 'Below current age'],
+                'trend': [86.5, 87.8, 89.1, 90.0]
+            },
+            'client_profile.current_401k_balance': {
+                'total_occurrences': 150,
+                'correct_count': 140,
+                'incorrect_count': 7,
+                'missing_count': 3,
+                'accuracy_rate': 93.3,
+                'precision': 92.8,
+                'recall': 91.9,
+                'common_errors': ['Format error', 'Negative value', 'Invalid currency'],
+                'trend': [89.8, 91.2, 92.5, 93.3]
+            }
+        },
+        'section_metrics': {
+            'call_details': {
+                'total_fields': 450,
+                'correct_fields': 410,
+                'incorrect_fields': 25,
+                'missing_fields': 15,
+                'accuracy_rate': 91.1,
+                'trend': [87.5, 88.9, 90.2, 91.1],
+                'error_distribution': {
+                    'format_errors': 12,
+                    'missing_data': 8,
+                    'inconsistencies': 5
+                }
+            },
+            'client_profile': {
+                'total_fields': 450,
+                'correct_fields': 395,
+                'incorrect_fields': 35,
+                'missing_fields': 20,
+                'accuracy_rate': 87.8,
+                'trend': [84.2, 85.5, 86.8, 87.8],
+                'error_distribution': {
+                    'format_errors': 15,
+                    'missing_data': 12,
+                    'inconsistencies': 8
+                }
+            },
+            'retirement_test': {
+                'total_fields': 450,
+                'correct_fields': 380,
+                'incorrect_fields': 45,
+                'missing_fields': 25,
+                'accuracy_rate': 84.4,
+                'trend': [81.1, 82.4, 83.7, 84.4],
+                'error_distribution': {
+                    'format_errors': 18,
+                    'missing_data': 15,
+                    'inconsistencies': 12
+                }
+            }
+        },
+        'error_patterns': {
+            'top_errors': [
+                ('Format errors', 45),
+                ('Missing data', 35),
+                ('Inconsistencies', 25),
+                ('Invalid values', 20),
+                ('Duplicate entries', 15)
+            ],
+            'error_trends': {
+                '2024-03-01': {'format': 12, 'missing': 10, 'invalid': 8},
+                '2024-03-02': {'format': 10, 'missing': 8, 'invalid': 7},
+                '2024-03-03': {'format': 8, 'missing': 7, 'invalid': 5},
+                '2024-03-04': {'format': 7, 'missing': 5, 'invalid': 4},
+                '2024-03-05': {'format': 5, 'missing': 4, 'invalid': 3}
+            },
+            'field_specific': {
+                'call_details.call_id': [
+                    ('Invalid format', 15),
+                    ('Duplicate ID', 8),
+                    ('Missing prefix', 5)
+                ],
+                'client_profile.client_age': [
+                    ('Age mismatch', 12),
+                    ('Invalid range', 10),
+                    ('Typo in value', 6)
+                ],
+                'retirement_test.retirement_age': [
+                    ('Unrealistic age', 18),
+                    ('Inconsistent with goals', 12),
+                    ('Below current age', 8)
+                ]
+            }
+        },
+        'time_metrics': {
+            'avg_time_per_annotation': pd.Timedelta(minutes=15),
+            'completion_trend': pd.Series({
+                pd.Timestamp('2024-03-01'): 15,
+                pd.Timestamp('2024-03-02'): 18,
+                pd.Timestamp('2024-03-03'): 22,
+                pd.Timestamp('2024-03-04'): 20,
+                pd.Timestamp('2024-03-05'): 25,
+                pd.Timestamp('2024-03-06'): 28,
+                pd.Timestamp('2024-03-07'): 30
+            }),
+            'time_distribution': {
+                '<10min': 25,
+                '10-15min': 45,
+                '15-20min': 35,
+                '20-25min': 25,
+                '>25min': 20
+            },
+            'daily_stats': {
+                'avg_annotations_per_day': 21.4,
+                'peak_day_count': 30,
+                'low_day_count': 15
+            },
+            'efficiency_metrics': {
+                'accuracy_vs_time': [
+                    {'time_range': '<10min', 'accuracy': 82.5},
+                    {'time_range': '10-15min', 'accuracy': 87.8},
+                    {'time_range': '15-20min', 'accuracy': 89.2},
+                    {'time_range': '20-25min', 'accuracy': 88.5},
+                    {'time_range': '>25min', 'accuracy': 87.1}
+                ]
+            }
+        },
+        'quality_metrics': {
+            'consistency_score': 92.5,
+            'completeness_score': 88.7,
+            'accuracy_by_annotator': {
+                'Alice': 91.2,
+                'Bob': 88.5,
+                'Charlie': 89.7,
+                'Diana': 90.3
+            },
+            'quality_trends': [
+                {'date': '2024-03-01', 'score': 87.5},
+                {'date': '2024-03-02', 'score': 88.2},
+                {'date': '2024-03-03', 'score': 89.1},
+                {'date': '2024-03-04', 'score': 89.8},
+                {'date': '2024-03-05', 'score': 90.5}
+            ],
+            'review_metrics': {
+                'reviewed_count': 85,
+                'pending_review': 35,
+                'approved_first_time': 72,
+                'required_revision': 13
+            }
+        },
+        'detailed_analysis': {
+            'error_patterns': {
+                'systematic_errors': [
+                    {'error_type': 'Format Error', 'frequency': 45, 'impact': 'High', 'fields_affected': ['call_id', 'date']},
+                    {'error_type': 'Missing Data', 'frequency': 35, 'impact': 'Medium', 'fields_affected': ['retirement_goals']},
+                    {'error_type': 'Inconsistency', 'frequency': 25, 'impact': 'High', 'fields_affected': ['age', 'retirement_age']},
+                    {'error_type': 'Invalid Values', 'frequency': 20, 'impact': 'Medium', 'fields_affected': ['401k_balance']}
+                ],
+                'error_correlations': [
+                    {'primary_error': 'Format Error', 'correlated_error': 'Missing Data', 'correlation_strength': 0.75},
+                    {'primary_error': 'Inconsistency', 'correlated_error': 'Invalid Values', 'correlation_strength': 0.65},
+                    {'primary_error': 'Missing Data', 'correlated_error': 'Invalid Values', 'correlation_strength': 0.45}
+                ]
+            },
+            'quality_indicators': {
+                'completeness_score': 0.88,
+                'consistency_score': 0.92,
+                'accuracy_score': 0.85,
+                'timeliness_score': 0.90
+            },
+            'error_distribution': {
+                'by_field': {
+                    'call_id': {'error_rate': 0.15, 'common_issues': ['format', 'missing']},
+                    'client_age': {'error_rate': 0.12, 'common_issues': ['inconsistency', 'invalid']},
+                    'retirement_goals': {'error_rate': 0.18, 'common_issues': ['missing', 'incomplete']}
+                },
+                'by_annotator': {
+                    'Alice': {'error_rate': 0.10, 'strength': 'format validation'},
+                    'Bob': {'error_rate': 0.15, 'strength': 'consistency check'},
+                    'Charlie': {'error_rate': 0.12, 'strength': 'completeness'}
+                }
+            }
+        },
+        'feedback_analysis': {
+            'sentiment_scores': {
+                'Positive': 45,
+                'Neutral': 35,
+                'Negative': 20
+            },
+            'key_themes': [
+                {'theme': 'Data Quality', 'frequency': 25, 'sentiment': 0.65},
+                {'theme': 'Tool Usability', 'frequency': 20, 'sentiment': 0.75},
+                {'theme': 'Guidelines Clarity', 'frequency': 15, 'sentiment': 0.55}
+            ],
+            'improvement_areas': [
+                {'area': 'Format Validation', 'frequency': 15, 'impact_score': 0.85},
+                {'area': 'Error Detection', 'frequency': 12, 'impact_score': 0.75},
+                {'area': 'User Interface', 'frequency': 10, 'impact_score': 0.65}
+            ]
+        }
+    }
+    
+    return metrics
+
+def render_metrics_dashboard(df):
+    """Render the metrics dashboard with advanced visualizations"""
+    metrics = calculate_metrics(df)
+    
+    # Add custom CSS for metrics dashboard
+    st.markdown("""
+        <style>
+        .metric-card {
+            background: rgba(26, 41, 66, 0.7);
+            border-radius: 10px;
+            padding: 20px;
+            margin: 10px 0;
+            border: 1px solid rgba(100, 181, 246, 0.2);
+        }
+        
+        .metric-header {
+            color: #64B5F6;
+            font-size: 1.2em;
+            font-weight: 500;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(100, 181, 246, 0.1);
+        }
+        
+        .metric-subheader {
+            color: #A4B5C6;
+            font-size: 1em;
+            margin: 10px 0;
+        }
+        
+        .metric-value {
+            font-size: 2em;
+            font-weight: 600;
+            color: #64B5F6;
+            margin: 10px 0;
+        }
+        
+        .metric-label {
+            font-size: 0.9em;
+            color: #A4B5C6;
+        }
+        
+        .progress-container {
+            background: rgba(26, 41, 66, 0.3);
+            border-radius: 5px;
+            height: 6px;
+            margin: 10px 0;
+            overflow: hidden;
+        }
+        
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #64B5F6, #2196F3);
+            transition: width 0.3s ease;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
+    # Overall Metrics Section
+    st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+    st.markdown('<div class="metric-header">Overall Performance</div>', unsafe_allow_html=True)
+    
+    # Display key metrics in columns
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        accuracy = metrics['accuracy_metrics']['overall_accuracy']
+        st.markdown(
+            f"""
+            <div>
+                <div class="metric-label">Overall Accuracy</div>
+                <div class="metric-value">{accuracy:.1f}%</div>
+                <div class="progress-container">
+                    <div class="progress-bar" style="width: {accuracy}%"></div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+    
+    with col2:
+        precision = metrics['accuracy_metrics']['precision']
+        st.markdown(
+            f"""
+            <div>
+                <div class="metric-label">Precision</div>
+                <div class="metric-value">{precision:.1f}%</div>
+                <div class="progress-container">
+                    <div class="progress-bar" style="width: {precision}%"></div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+    
+    with col3:
+        recall = metrics['accuracy_metrics']['recall']
+        st.markdown(
+            f"""
+            <div>
+                <div class="metric-label">Recall</div>
+                <div class="metric-value">{recall:.1f}%</div>
+                <div class="progress-container">
+                    <div class="progress-bar" style="width: {recall}%"></div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+    
+    with col4:
+        f1_score = metrics['accuracy_metrics']['f1_score']
+        st.markdown(
+            f"""
+            <div>
+                <div class="metric-label">F1 Score</div>
+                <div class="metric-value">{f1_score:.1f}%</div>
+                <div class="progress-container">
+                    <div class="progress-bar" style="width: {f1_score}%"></div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # Performance Trends
+    st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+    st.markdown('<div class="metric-header">Performance Trends</div>', unsafe_allow_html=True)
+    trend_data = pd.DataFrame(metrics['accuracy_metrics']['trend'])
+    st.line_chart(trend_data.set_index('date')[['accuracy', 'precision', 'recall']])
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # Field-Level Analysis
+    st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+    st.markdown('<div class="metric-header">Field-Level Analysis</div>', unsafe_allow_html=True)
+    
+    for field, metrics in metrics['field_level_metrics'].items():
+        st.markdown(f'<div class="metric-subheader">{field}</div>', unsafe_allow_html=True)
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Accuracy", f"{metrics['accuracy_rate']:.1f}%")
+        with col2:
+            st.metric("Precision", f"{metrics['precision']:.1f}%")
+        with col3:
+            st.metric("Recall", f"{metrics['recall']:.1f}%")
+        
+        # Subattribute Analysis
+        if 'subattributes' in metrics:
+            st.markdown('<div class="metric-subheader">Subattribute Analysis</div>', unsafe_allow_html=True)
+            subattr_df = pd.DataFrame([
+                {'Subattribute': k, 'Precision': v['precision'], 'Recall': v['recall']}
+                for k, v in metrics['subattributes'].items()
+            ])
+            st.dataframe(subattr_df.style.format({'Precision': '{:.1f}%', 'Recall': '{:.1f}%'}))
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+
+
 # Main app logic
 def main():
     st.title("📞 Call Transcript Annotation Tool")
@@ -1131,7 +1692,8 @@ def main():
             "📝 Transcript & Annotation", 
             "📊 View Annotations", 
             "📋 Annotation Guidelines",
-            "💬 Chat Assistant"
+            "💬 Chat Assistant",
+            "📈 Metrics Dashboard"  # New tab
         ])
         
         with tabs[0]:
@@ -1602,20 +2164,139 @@ def main():
         with tabs[3]:
             chat_interface()
 
+        with tabs[4]:  # Metrics Dashboard tab
+            st.title("📈 Annotation Metrics Dashboard")
+            render_metrics_dashboard(annotations_df)
+
     except Exception as e:
         st.error(f"Error loading data: {str(e)}")
         return
 
+def get_field_definition(key):
+    """Return the tooltip definition for a given field"""
+    definitions = {
+        # Call Details
+        "call_id": {
+            "title": "Call Identifier",
+            "description": "Unique identifier for the call. Must follow format: numeric string (e.g., '12345')"
+        },
+        "call_date": {
+            "title": "Call Date",
+            "description": "Date when the call took place. Must be in YYYY-MM-DD format and not in the future"
+        },
+        "call_type": {
+            "title": "Call Type",
+            "description": "Category of the call (e.g., Initial Consultation, Follow-up, Complaint)"
+        },
+        
+        # Client Profile
+        "client_age": {
+            "title": "Client Age",
+            "description": "Current age of the client. Must be between 18-100 years"
+        },
+        "current_401k_balance": {
+            "title": "Current 401(k) Balance",
+            "description": "Current balance in client's 401(k) account. Must be a non-negative number"
+        },
+        "years_to_retirement": {
+            "title": "Years to Retirement",
+            "description": "Number of years until planned retirement. Must be a positive integer"
+        },
+        
+        # Retirement Goals
+        "retirement_goal_flag": {
+            "title": "Retirement Goal Flag",
+            "description": "Indicates if client has specific retirement goals (True/False)"
+        },
+        "retirement_goals": {
+            "title": "Retirement Goals",
+            "description": "List of specific retirement goals mentioned by the client"
+        },
+        "retirement_age": {
+            "title": "Target Retirement Age",
+            "description": "Client's target age for retirement. Must be greater than current age"
+        },
+        
+        # Feedback Ratings
+        "call_quality_rating": {
+            "title": "Call Quality Rating",
+            "description": "Overall quality of the call interaction and audio clarity"
+        },
+        "agent_performance_rating": {
+            "title": "Agent Performance Rating",
+            "description": "How well the agent handled the customer's needs and followed procedures"
+        },
+        "customer_satisfaction_rating": {
+            "title": "Customer Satisfaction",
+            "description": "Perceived level of customer satisfaction based on the interaction"
+        },
+        "resolution_effectiveness_rating": {
+            "title": "Resolution Effectiveness",
+            "description": "How effectively the customer's issue or inquiry was resolved"
+        }
+    }
+    
+    return definitions.get(key.lower(), {
+        "title": key.replace('_', ' ').title(),
+        "description": "Please validate this field according to the guidelines"
+    })
+
+def get_section_title(key):
+    """Return a user-friendly section title"""
+    sections = {
+        "call_details": "Call Details",
+        "client_profile": "Client Profile",
+        "retirement_test": "Retirement Goals",
+        "feedback_ratings": "Feedback"
+    }
+    return sections.get(key.lower(), key.replace('_', ' ').title())
+
 def render_field(key, value, parent_key="", is_subsection=False):
-    """Enhanced render_field function with validation controls"""
+    """Enhanced render_field function with validation controls and tooltips"""
     field_id = f"{parent_key}_{key}".strip('_')
+    field_def = get_field_definition(key)
+    
+    # Get the display title for the field
+    if parent_key and not parent_key.endswith(key):
+        parent_section = get_section_title(parent_key.split('_')[-1] if '_' in parent_key else parent_key)
+        display_title = f"{parent_section} - {key.replace('_', ' ').title()}"
+    else:
+        display_title = key.replace('_', ' ').title()
     
     if isinstance(value, (str, int, float)):
         with st.container():
+            # Create label with tooltip using modern SVG icon and nested title styling
+            parent_section = get_section_title(parent_key.split('_')[-1] if '_' in parent_key else parent_key)
+            field_name = key.replace('_', ' ').title()
+            
+            st.markdown(
+                f"""
+                <div class="field-container nested-field">
+                    <div class="nested-field-title">
+                        {f'<span class="section-name">{parent_section}</span><span class="separator">›</span>' if parent_key else ''}
+                        <span class="field-name">{field_name}</span>
+                        <div class="tooltip-container">
+                            <span style="display: inline-flex; align-items: center; justify-content: center;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <circle cx="12" cy="12" r="9" stroke="#64B5F6" stroke-width="1.5" stroke-opacity="0.8"/>
+                                    <circle cx="12" cy="18" r="0.5" fill="#64B5F6" fill-opacity="0.8"/>
+                                    <path d="M12 16V14.5811C12 13.6369 12.5286 12.7708 13.3691 12.3459C14.2095 11.921 14.7382 11.0548 14.7382 10.1107C14.7382 8.83643 13.7117 7.81 12.4375 7.81C11.1632 7.81 10.1368 8.83643 10.1368 10.1107" stroke="#64B5F6" stroke-width="1.5" stroke-opacity="0.8"/>
+                                </svg>
+                            </span>
+                            <div class="tooltip-text">
+                                <div class="tooltip-title">{field_def['title']}</div>
+                                <div class="tooltip-description">{field_def['description']}</div>
+                            </div>
+                        </div>
+                    </div>
+                """,
+                unsafe_allow_html=True
+            )
+            
             # Adjusted column widths: main content takes more space, checkboxes take less
             col1, col2, col3 = st.columns([3, 0.5, 0.5])
             with col1:
-                input_value = st.text_area(f"{key.capitalize()}", value, key=f"input_{field_id}")
+                input_value = st.text_area("", value, key=f"input_{field_id}", label_visibility="collapsed")
             with col2:
                 is_incorrect = st.checkbox(
                     "❌",
@@ -1674,7 +2355,33 @@ def render_field(key, value, parent_key="", is_subsection=False):
                 st.markdown('<div style="text-align: left; color: #64B5F6; font-size: 0.8em; margin-bottom: 5px;">Missing</div>', 
                           unsafe_allow_html=True)
         
-        # Initialize session state for list items if not already initialized
+        # Get field definition for list
+        field_def = get_field_definition(key)
+        
+        # Add tooltip for list field with combined title
+        st.markdown(
+            f"""
+            <div style="display: flex; align-items: center; margin-bottom: 10px;">
+                <span style="color: #64B5F6; font-size: 0.9em;">{display_title}</span>
+                <div class="tooltip-container" style="margin-left: 4px;">
+                    <span style="display: inline-flex; align-items: center; justify-content: center;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <circle cx="12" cy="12" r="9" stroke="#64B5F6" stroke-width="1.5" stroke-opacity="0.8"/>
+                            <circle cx="12" cy="18" r="0.5" fill="#64B5F6" fill-opacity="0.8"/>
+                            <path d="M12 16V14.5811C12 13.6369 12.5286 12.7708 13.3691 12.3459C14.2095 11.921 14.7382 11.0548 14.7382 10.1107C14.7382 8.83643 13.7117 7.81 12.4375 7.81C11.1632 7.81 10.1368 8.83643 10.1368 10.1107" stroke="#64B5F6" stroke-width="1.5" stroke-opacity="0.8"/>
+                        </svg>
+                    </span>
+                    <div class="tooltip-text">
+                        <div class="tooltip-title">{field_def['title']}</div>
+                        <div class="tooltip-description">{field_def['description']}</div>
+                    </div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+        
+        # Initialize session state for list items
         if f"list_items_{field_id}" not in st.session_state:
             st.session_state[f"list_items_{field_id}"] = value.copy()
         
@@ -1685,7 +2392,6 @@ def render_field(key, value, parent_key="", is_subsection=False):
             with st.container():
                 col1, col2, col3 = st.columns([3, 0.5, 0.5])
                 with col1:
-                    # Initialize session state for this item if not already done
                     if f"input_{field_id}_{i}" not in st.session_state:
                         st.session_state[f"input_{field_id}_{i}"] = item
                     
@@ -1695,7 +2401,6 @@ def render_field(key, value, parent_key="", is_subsection=False):
                         key=f"text_{field_id}_{i}"
                     )
                     
-                    # Update session state
                     st.session_state[f"input_{field_id}_{i}"] = input_value
                 
                 with col2:
@@ -1739,7 +2444,6 @@ def render_field(key, value, parent_key="", is_subsection=False):
             unsafe_allow_html=True
         )
         
-        # New item input
         new_item = st.text_input(
             "",
             key=f"new_item_input_{field_id}",
@@ -1747,7 +2451,6 @@ def render_field(key, value, parent_key="", is_subsection=False):
             label_visibility="collapsed"
         )
         
-        # Add new item if there's input and form is submitted
         if new_item and st.session_state.get("form_submitted", False):
             st.session_state[f"list_items_{field_id}"].append(new_item)
             updated_list.append({
