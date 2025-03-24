@@ -797,6 +797,89 @@ def add_custom_css():
         .nested-field .tooltip-text {
             min-width: 250px;
         }
+
+        /* Horizontal Radio Button Styling */
+        [data-testid="stHorizontalBlock"] > div > div > div > div > div > label {
+            background: rgba(26, 41, 66, 0.7) !important;
+            border: 1px solid rgba(100, 181, 246, 0.2) !important;
+            padding: 10px 15px !important;
+            border-radius: 8px !important;
+            margin: 5px !important;
+            min-width: 100px;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        [data-testid="stHorizontalBlock"] > div > div > div > div > div > label:hover {
+            background: rgba(100, 181, 246, 0.1) !important;
+            transform: translateY(-2px);
+        }
+
+        [data-testid="stHorizontalBlock"] > div > div > div > div > div > label[data-checked="true"] {
+            background: rgba(100, 181, 246, 0.2) !important;
+            border-color: #64B5F6 !important;
+            transform: translateY(-2px);
+        }
+
+        /* Radio Group Container */
+        .stRadio > div {
+            display: flex;
+            flex-direction: row !important;
+            gap: 10px;
+            margin: 10px 0;
+            padding: 10px;
+            background: rgba(26, 41, 66, 0.4);
+            border-radius: 10px;
+            border: 1px solid rgba(100, 181, 246, 0.1);
+        }
+
+        /* Status Filter Label */
+        .stRadio > label {
+            color: #64B5F6 !important;
+            font-size: 0.9em !important;
+            font-weight: 500 !important;
+            margin-bottom: 5px !important;
+        }
+
+        /* Status Update Radio Button Styling */
+        .stRadio [role="radiogroup"] {
+            background: rgba(26, 41, 66, 0.4);
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid rgba(100, 181, 246, 0.1);
+            margin: 15px 0;
+        }
+
+        .stRadio [role="radio"] {
+            background: rgba(26, 41, 66, 0.7) !important;
+            border: 1px solid rgba(100, 181, 246, 0.2) !important;
+            padding: 15px 25px !important;
+            border-radius: 8px !important;
+            transition: all 0.3s ease;
+            min-width: 120px;
+            text-align: center;
+        }
+
+        .stRadio [role="radio"]:hover {
+            background: rgba(100, 181, 246, 0.1) !important;
+            transform: translateY(-2px);
+        }
+
+        .stRadio [role="radio"][data-checked="true"] {
+            background: rgba(100, 181, 246, 0.2) !important;
+            border-color: #64B5F6 !important;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(100, 181, 246, 0.1);
+        }
+
+        /* Status Update Container */
+        .status-update-section {
+            background: rgba(26, 41, 66, 0.5);
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+            border: 1px solid rgba(100, 181, 246, 0.1);
+        }
         </style>
         """,
         unsafe_allow_html=True
@@ -1533,39 +1616,6 @@ def render_metrics_dashboard(df):
     
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # Performance Trends
-    st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-    st.markdown('<div class="metric-header">Performance Trends</div>', unsafe_allow_html=True)
-    trend_data = pd.DataFrame(metrics['accuracy_metrics']['trend'])
-    st.line_chart(trend_data.set_index('date')[['accuracy', 'precision', 'recall']])
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    # Field-Level Analysis
-    st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-    st.markdown('<div class="metric-header">Field-Level Analysis</div>', unsafe_allow_html=True)
-    
-    for field, metrics in metrics['field_level_metrics'].items():
-        st.markdown(f'<div class="metric-subheader">{field}</div>', unsafe_allow_html=True)
-        
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Accuracy", f"{metrics['accuracy_rate']:.1f}%")
-        with col2:
-            st.metric("Precision", f"{metrics['precision']:.1f}%")
-        with col3:
-            st.metric("Recall", f"{metrics['recall']:.1f}%")
-        
-        # Subattribute Analysis
-        if 'subattributes' in metrics:
-            st.markdown('<div class="metric-subheader">Subattribute Analysis</div>', unsafe_allow_html=True)
-            subattr_df = pd.DataFrame([
-                {'Subattribute': k, 'Precision': v['precision'], 'Recall': v['recall']}
-                for k, v in metrics['subattributes'].items()
-            ])
-            st.dataframe(subattr_df.style.format({'Precision': '{:.1f}%', 'Recall': '{:.1f}%'}))
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-
 
 # Main app logic
 def main():
@@ -1624,6 +1674,12 @@ def main():
     try:
         annotations_df = pd.DataFrame(sample_data)
         
+        # Initialize session state for filters if not exists
+        if 'current_interaction_id' not in st.session_state:
+            st.session_state.current_interaction_id = None
+        if 'current_status' not in st.session_state:
+            st.session_state.current_status = "Not Started"
+
         # Add filters in the sidebar
         st.sidebar.markdown("## Filter Conversations")
         
@@ -1633,20 +1689,38 @@ def main():
             options=annotations_df['annotator'].unique(),
             key='sidebar_annotator_select'
         )
+
+        # Add completion status filter right after annotator selection
+        # Use session state to maintain selected status
+        status_index = ["Not Started", "In Progress", "Completed"].index(
+            st.session_state.current_status if st.session_state.current_status else "Not Started"
+        )
+        completion_status = st.sidebar.radio(
+            "Select Completion Status",
+            options=["Not Started", "In Progress", "Completed"],
+            index=status_index,
+            key='completion_status_filter',
+            horizontal=True
+        )
         
         # Interaction ID selection with unique key
+        # Use session state to maintain selected interaction_id
+        interaction_options = annotations_df['interaction_id'].unique()
+        default_interaction_index = 0
+        if st.session_state.current_interaction_id in interaction_options:
+            default_interaction_index = np.where(interaction_options == st.session_state.current_interaction_id)[0][0]
+            
         selected_interaction_id = st.sidebar.selectbox(
             "Select Interaction ID",
-            options=annotations_df['interaction_id'].unique(),
+            options=interaction_options,
+            index=default_interaction_index,
             key='sidebar_interaction_select'
         )
         
-        # Add separator
-        st.sidebar.markdown("<hr style='margin: 25px 0; border: none; border-top: 1px solid rgba(100, 181, 246, 0.2);'>", unsafe_allow_html=True)
-        
-        # Get current status for selected annotation
+        # Filter the dataframe based on both annotator and status
         filtered_df = annotations_df[
             (annotations_df['annotator'] == selected_annotator) &
+            (annotations_df['status'] == completion_status) &
             (annotations_df['interaction_id'] == selected_interaction_id)
         ]
         
@@ -1682,6 +1756,12 @@ def main():
                     row_index = filtered_df.index[0]
                     annotations_df.at[row_index, 'status'] = new_status
                     annotations_df.at[row_index, 'last_updated'] = pd.Timestamp.now()
+                    
+                    # Store current interaction_id in session state
+                    st.session_state.current_interaction_id = selected_interaction_id
+                    st.session_state.current_status = new_status
+                    
+                    # Update the session state DataFrame
                     st.session_state.df = annotations_df
                     st.rerun()
                 except Exception as e:
@@ -1840,6 +1920,36 @@ def main():
                                 "resolution_effectiveness_rating": resolution_effectiveness
                             })
                             
+                            # Add status update section before submit button
+                            st.markdown(
+                                """
+                                <div style="margin: 30px 0;">
+                                    <div style="color: #64B5F6; font-size: 1.2em; font-weight: 500; margin-bottom: 15px;">
+                                        📋 Update Annotation Status
+                                    </div>
+                                    <div style="color: #A4B5C6; font-size: 0.9em; margin-bottom: 20px;">
+                                        Select the current status of your annotation
+                                    </div>
+                                </div>
+                                """,
+                                unsafe_allow_html=True
+                            )
+
+                            # Status selection before submit
+                            annotation_status = st.radio(
+                                "Select Status",
+                                options=["Not Started", "In Progress", "Completed"],
+                                horizontal=True,
+                                key="annotation_status_update"
+                            )
+
+                            # Add status to updated_sections
+                            updated_sections["annotation_metadata"] = {
+                                "status": annotation_status,
+                                "last_updated": pd.Timestamp.now().isoformat(),
+                                "annotator": selected_annotator
+                            }
+                            
                             # Add Save button with enhanced styling
                             st.markdown(
                                 """
@@ -1870,6 +1980,12 @@ def main():
                                         current_df = pd.read_parquet("annotations.parquet")
                                         current_df.at[row_index, 'annotated_output'] = json.dumps(updated_sections, indent=2)
                                         current_df.at[row_index, 'last_updated'] = pd.Timestamp.now()
+                                        current_df.at[row_index, 'status'] = annotation_status
+                                        
+                                        # Update session state for filters
+                                        st.session_state.current_interaction_id = selected_interaction_id
+                                        st.session_state.current_status = annotation_status
+                                        
                                         current_df.to_parquet("annotations.parquet", index=False)
                                         st.session_state.df = current_df
                                         
@@ -1882,7 +1998,7 @@ def main():
                                             """,
                                             unsafe_allow_html=True
                                         )
-                                        st.experimental_rerun()
+                                        st.rerun()
                                     except Exception as e:
                                         # Show error message with animation
                                         st.markdown(
